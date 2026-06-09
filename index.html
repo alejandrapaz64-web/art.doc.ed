@@ -907,8 +907,15 @@ function setLogos(){
 //  STORAGE
 // ══════════════════════════════════════
 const SK = "scitrack4";
-// Store en memoria para base64 de ponencias (no persiste en localStorage)
-const _ponArchivos = {}; // clave: estudianteId → {certBase64,certTipo,avalBase64,avalTipo}
+const SK_PON_ARCH = "scitrack_pon_arch_"; // prefijo clave por estudianteId
+function savePonArch(idEst,data){try{localStorage.setItem(SK_PON_ARCH+idEst,JSON.stringify(data));}catch(e){console.warn("savePonArch error",e);}}
+function loadPonArch(idEst){try{return JSON.parse(localStorage.getItem(SK_PON_ARCH+idEst)||"null")||null;}catch(e){return null;}}
+// Compatibilidad: _ponArchivos ahora lee/escribe en localStorage por clave separada
+const _ponArchivos={
+  _cache:{},
+  set:function(id,v){this._cache[id]=v;savePonArch(id,v);},
+  get:function(id){if(this._cache[id])return this._cache[id];const d=loadPonArch(id);if(d)this._cache[id]=d;return d||null;}
+};
 function loadSt(){return JSON.parse(localStorage.getItem(SK)||"null")||{estudiantes:[],articulos:[],usuarios:[],config:{arts:2,estado:"aceptado",cuartiles:"Q1,Q2",meses:6},sheetsUrl:""};}
 
 function parseCohorteFecha(val){
@@ -2730,10 +2737,10 @@ function renderPonencias(){
 
 function verDocPonencia(i,tipo){
   const p=ST.ponencias[i];if(!p)return;
-  const arch=_ponArchivos[p.estudianteId]||{};
+  const arch=_ponArchivos.get(p.estudianteId)||{};
   const b64=tipo==='cert'?(p.certBase64||arch.certBase64):(p.avalBase64||arch.avalBase64);
   const mime=tipo==='cert'?(p.certTipo||arch.certTipo||''):(p.avalTipo||arch.avalTipo||'');
-  if(!b64){toast("Documento no disponible en esta sesión. El estudiante debe reenviar o recargar.","err");return;}
+  if(!b64){toast("Documento no disponible. El estudiante debe reenviar los soportes.","err");return;}
   const w=window.open('','_blank');
   if(mime.includes('pdf')){
     w.document.write('<!DOCTYPE html><html><body style="margin:0"><iframe src="data:application/pdf;base64,'+b64+'" style="width:100%;height:100vh;border:none"></iframe></body></html>');
@@ -2767,11 +2774,11 @@ function subirPonencia(){
           estudianteCorreo:e?e.correo:"",evento,fecha,titulo,
           estado:"pendiente",fechaEnvio:new Date().toLocaleString("es-CO")
         };
-        // Guardar base64 solo en memoria, NO en localStorage
-        if(certData) _ponArchivos[idEst]={
+        // Guardar base64 en localStorage por clave separada (persiste entre sesiones)
+        if(certData) _ponArchivos.set(idEst,{
           certBase64:certData.split(",")[1],certTipo:certFile.type,
           avalBase64:avalData?avalData.split(",")[1]:"",avalTipo:avalFile.type
-        };
+        });
         ST.ponencias.push(ponencia);
         saveSt(ST);
         notificarPonencia(ponencia);
