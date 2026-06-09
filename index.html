@@ -1266,11 +1266,25 @@ function renderDashPonencias(){
   if(!pons.length){wrap.innerHTML='<p style="color:var(--txt3);font-size:.78rem">No hay ponencias registradas.</p>';return;}
   const pendCount=pons.filter(p=>p.estado==="pendiente"||p.estado==="Pendiente verificación").length;
   const verCount=pons.filter(p=>p.estado==="verificado").length;
+  const rechCount=pons.filter(p=>p.estado==="rechazado").length;
+  const lineas=["L1","L2","L3"];
+  const lnames={"L1":"Pedagogía e Infancia","L2":"Institución Educativa","L3":"TIC"};
+  const lineaStats=lineas.map(l=>{
+    const ests=(ST.estudiantes||[]).filter(e=>e.linea===l);
+    const conPon=ests.filter(e=>(ST.ponencias||[]).some(p=>p.estudianteId===e.id)).length;
+    return{nombre:lnames[l]||l,total:ests.length,conPon,sinPon:ests.length-conPon};
+  }).filter(s=>s.total>0);
   wrap.innerHTML=`
-    <div class="kg" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px;">
+    <div class="kg" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">
       <div class="kpi" style="border-left-color:#D97706"><div class="kv">${pendCount}</div><div class="kl">Por verificar</div></div>
       <div class="kpi" style="border-left-color:var(--verde)"><div class="kv">${verCount}</div><div class="kl">Verificadas</div></div>
+      <div class="kpi" style="border-left-color:var(--rojo)"><div class="kv">${rechCount}</div><div class="kl">Rechazadas</div></div>
     </div>
+    ${lineaStats.length?`<div style="font-size:.72rem;font-weight:600;color:var(--txt2);margin-bottom:6px;text-transform:uppercase">Ponencias por línea</div>
+    <table style="width:100%;border-collapse:collapse;font-size:.73rem;margin-bottom:10px">
+      <thead><tr style="background:var(--azulx)"><th style="padding:4px 6px;text-align:left">Línea</th><th style="padding:4px 6px;text-align:center">Con ponencia</th><th style="padding:4px 6px;text-align:center">Sin ponencia</th></tr></thead>
+      <tbody>${lineaStats.map((s,i)=>`<tr style="background:${i%2===0?"#F8FBFF":"#fff"}"><td style="padding:4px 6px">${s.nombre}</td><td style="padding:4px 6px;text-align:center;color:var(--verde);font-weight:700">${s.conPon}</td><td style="padding:4px 6px;text-align:center;color:var(--rojo);font-weight:700">${s.sinPon}</td></tr>`).join("")}</tbody>
+    </table>`:""}
     <div style="font-size:.72rem;font-weight:600;color:var(--txt2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.03em">Detalle de ponencias</div>
     <table style="width:100%;border-collapse:collapse;font-size:.75rem">
       <thead><tr style="background:var(--azul);color:#fff">
@@ -1908,12 +1922,14 @@ function syncCompleto(){
 function notificarVerificacionPonencia(p){
   var url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
   if(!url||!p)return;
-  var payload=JSON.stringify({
-    action:'ponencia_verificada',sheetId:SHEETS_ID,
-    estudianteId:p.estudianteId,estudiante:p.estudianteNombre||p.estudiante||'',
-    ts:Date.now()
-  });
-  try{fetch(url,{method:'POST',mode:'no-cors',body:payload}).catch(function(){});}catch(e){}
+  var s=document.createElement("script");
+  s.src=url
+    +"?callback=_sc&action=ponencia_verificada"
+    +"&estudianteId="+encodeURIComponent(p.estudianteId||"")
+    +"&estudiante="+encodeURIComponent(p.estudianteNombre||p.estudiante||"")
+    +"&ts="+Date.now();
+  document.head.appendChild(s);
+  setTimeout(function(){try{document.head.removeChild(s);}catch(e){}},5000);
 }
 
 function actualizarBannerSync(pendientes){
@@ -2664,7 +2680,7 @@ function renderPonencias(){
     res.innerHTML=`<div class="kg kg4" style="margin-bottom:0">
       <div class="kpi"><div class="kv">${todas.length}</div><div class="kl">Enviadas</div></div>
       <div class="kpi" style="border-left-color:var(--verde)"><div class="kv">${todas.filter(p=>p.estado==='verificado').length}</div><div class="kl">Verificadas</div></div>
-      <div class="kpi" style="border-left-color:#D97706"><div class="kv">${todas.filter(p=>p.estado==='pendiente').length}</div><div class="kl">Por verificar</div></div>
+      <div class="kpi" style="border-left-color:#D97706"><div class="kv">${todas.filter(p=>p.estado==='pendiente'||p.estado==='Pendiente verificación'||p.estado==='Pendiente verificacion').length}</div><div class="kl">Por verificar</div></div>
       <div class="kpi" style="border-left-color:var(--rojo)"><div class="kv">${ST.estudiantes.length-todas.length}</div><div class="kl">Sin subir</div></div>
     </div>`;
     const listaEl=document.getElementById("ponencias-lista-coord");
@@ -2734,8 +2750,6 @@ function subirPonencia(){
       ["ponEvento","ponTitulo","ponFecha"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
       ["ponCertFile","ponAvalFile"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
       document.getElementById("card-ponencia-upload").style.display="none";
-      renderPonencias();
-      renderDashEstudiante();
       const mc=document.createElement("div");
       mc.style.cssText="position:fixed;inset:0;background:rgba(0,32,96,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
       mc.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;padding:32px 28px;text-align:center;box-shadow:0 8px 40px rgba(0,32,96,.18)">
@@ -2745,7 +2759,7 @@ function subirPonencia(){
         <div style="background:#F0F6FF;border-radius:8px;padding:10px 14px;font-size:.78rem;color:#185FA5;margin-bottom:18px;text-align:left">
           <strong>Próximos pasos:</strong><br>La Coordinación revisará el certificado y el aval institucional. En caso de observaciones, se le notificará para reenviar los soportes.
         </div>
-        <button onclick="this.closest('div[style*=fixed]').remove()" style="background:#002060;color:#fff;border:none;border-radius:8px;padding:10px 32px;font-weight:700;font-size:.9rem;cursor:pointer">Entendido</button>
+        <button onclick="this.closest('div[style*=fixed]').remove();renderPonencias();try{renderDashEstudiante();}catch(ex){}" style="background:#002060;color:#fff;border:none;border-radius:8px;padding:10px 32px;font-weight:700;font-size:.9rem;cursor:pointer">Entendido</button>
       </div>`;
       document.body.appendChild(mc);
     });
@@ -2756,10 +2770,14 @@ function notificarPonencia(p){
   const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
   if(!url)return;
   const correos=getCorreosNotif().join(',');
+  const eReal=estSesion||ST.estudiantes[0]||{};
+  const nomReal=eReal.nombre||p.estudianteNombre||"";
+  const correoReal=eReal.correo||p.estudianteCorreo||"";
+  const idReal=eReal.id||p.estudianteId||"";
   const payload=JSON.stringify({
     action:"ponencia_nueva",sheetId:SHEETS_ID,
-    estudiante:p.estudianteNombre,estudianteId:p.estudianteId,
-    correo:p.estudianteCorreo,correosNotif:correos,
+    estudiante:nomReal,estudianteId:idReal,
+    correo:correoReal,correosNotif:correos,
     evento:p.evento,fecha:p.fecha,titulo:p.titulo,
     fechaEnvio:p.fechaEnvio,ts:Date.now()
   });
@@ -2767,9 +2785,9 @@ function notificarPonencia(p){
   const s=document.createElement("script");
   s.src=url
     +"?callback=_sc&action=ponencia_nueva"
-    +"&estudiante="+encodeURIComponent(p.estudianteNombre||"")
-    +"&estudianteId="+encodeURIComponent(p.estudianteId||"")
-    +"&correo="+encodeURIComponent(p.estudianteCorreo||"")
+    +"&estudiante="+encodeURIComponent(nomReal)
+    +"&estudianteId="+encodeURIComponent(idReal)
+    +"&correo="+encodeURIComponent(correoReal)
     +"&evento="+encodeURIComponent(p.evento||"")
     +"&fecha="+encodeURIComponent(p.fecha||"")
     +"&titulo="+encodeURIComponent(p.titulo||"")
@@ -2789,18 +2807,22 @@ function verificarPonencia(i){
   toast("✅ Ponencia verificada — requisito cumplido","ok");
   renderPonencias();
   renderDash();
+  renderDashPonencias();
 }
 
 function syncEstadoPonenciaSheets(p){
   const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
   if(!url)return;
-  const payload=JSON.stringify({
-    action:"ponencia_verificada",sheetId:SHEETS_ID,
-    estudianteId:p.estudianteId,
-    estudiante:p.estudianteNombre||p.estudiante||"",
-    ts:Date.now()
-  });
-  fetch(url,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},body:payload}).catch(()=>{});
+  const nomReal=p.estudianteNombre||p.estudiante||"";
+  const idReal=p.estudianteId||"";
+  const s=document.createElement("script");
+  s.src=url
+    +"?callback=_sc&action=ponencia_verificada"
+    +"&estudianteId="+encodeURIComponent(idReal)
+    +"&estudiante="+encodeURIComponent(nomReal)
+    +"&ts="+Date.now();
+  document.head.appendChild(s);
+  setTimeout(()=>{try{document.head.removeChild(s);}catch(e){}},5000);
 }
 
 function generarCertificadoPonenciaProppia(){
@@ -2830,12 +2852,15 @@ function rechazarPonencia(i){
     s.src=url+"?callback=_sc&action=ponencia_rechazada"
       +"&estudianteId="+encodeURIComponent(p.estudianteId||"")
       +"&estudiante="+encodeURIComponent(p.estudianteNombre||p.estudiante||"")
+      +"&observacion="+encodeURIComponent(obs||"")
       +"&ts="+Date.now();
     document.head.appendChild(s);
     setTimeout(()=>{try{document.head.removeChild(s);}catch(e){}},5000);
   }
   toast("Ponencia rechazada · El estudiante debe volver a subir los soportes","ok");
   renderPonencias();
+  renderDash();
+  renderDashPonencias();
 }
 
 // ══════════════════════════════════════
