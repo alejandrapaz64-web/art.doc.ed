@@ -2710,7 +2710,8 @@ function renderPonencias(){
       <div class="kpi"><div class="kv">${todas.length}</div><div class="kl">Enviadas</div></div>
       <div class="kpi" style="border-left-color:var(--verde)"><div class="kv">${todas.filter(p=>p.estado==='verificado').length}</div><div class="kl">Verificadas</div></div>
       <div class="kpi" style="border-left-color:#D97706"><div class="kv">${todas.filter(p=>p.estado==='pendiente'||p.estado==='Pendiente verificación'||p.estado==='Pendiente verificacion').length}</div><div class="kl">Por verificar</div></div>
-      <div class="kpi" style="border-left-color:var(--rojo)"><div class="kv">${ST.estudiantes.length-todas.length}</div><div class="kl">Sin subir</div></div>
+      <div class="kpi" style="border-left-color:var(--rojo)"><div class="kv">${todas.filter(p=>p.estado==='rechazado').length}</div><div class="kl">Rechazadas</div></div>
+      <div class="kpi" style="border-left-color:#64748B"><div class="kv">${ST.estudiantes.length-todas.length}</div><div class="kl">Sin subir</div></div>
     </div>`;
     const listaEl=document.getElementById("ponencias-lista-coord");
     if(listaEl) listaEl.innerHTML=todas.length?todas.map((p,i)=>`
