@@ -1932,8 +1932,10 @@ async function reintentarSync(){
 
 async function cargarDesdeSheets(){
   try{
-    const resp=await fetch(SHEETS_CSV_URL+"&t="+Date.now());
-    if(!resp.ok) return;
+    const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
+    if(!url){console.warn("Sheets load: no GAS URL");return;}
+    const resp=await fetch(url+"?action=get_estudiantes&t="+Date.now());
+    if(!resp.ok){console.warn("Sheets load: Failed to fetch");return;}
     const text=await resp.text();
     const lines=text.split("\n").map(l=>l.trim()).filter(l=>l);
     if(lines.length<2) return;
