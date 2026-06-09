@@ -2726,8 +2726,8 @@ function renderPonencias(){
           <span class="b ${p.estado==='verificado'?'bve':p.estado==='rechazado'?'bro':'bam'}">${p.estado==='verificado'?'✅ Verificada':p.estado==='rechazado'?'❌ Rechazada':'⏳ Pendiente'}</span>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-          ${p.certBase64&&["coordinadora","direccion","director"].includes(rolActual)?`<button class="btn bs bsm" onclick="verDocPonencia(${i},'cert')">📄 Ver certificado</button>`:''}
-          ${p.avalBase64&&["coordinadora","direccion","director"].includes(rolActual)?`<button class="btn bs bsm" onclick="verDocPonencia(${i},'aval')">📄 Ver aval</button>`:''}
+          ${(_ponArchivos.get(p.estudianteId)||{}).certBase64||p.certBase64?`<button class="btn bs bsm" onclick="verDocPonencia(${i},'cert')">📄 Ver certificado</button>`:''}
+          ${(_ponArchivos.get(p.estudianteId)||{}).avalBase64||p.avalBase64?`<button class="btn bs bsm" onclick="verDocPonencia(${i},'aval')">📄 Ver aval</button>`:''}
           ${p.estado!=='verificado'?`<button class="btn bsm" style="background:var(--verdeb);color:var(--verde);border:1px solid #A3C97C" onclick="verificarPonencia(${i})">✅ Verificar · 100%</button>`:''}
           ${p.estado!=='rechazado'?`<button class="btn bd bsm" onclick="rechazarPonencia(${i})">❌ Rechazar</button>`:''}
         </div>
@@ -2814,14 +2814,6 @@ function notificarPonencia(p){
   const nomReal=eReal.nombre||p.estudianteNombre||"";
   const correoReal=eReal.correo||p.estudianteCorreo||"";
   const idReal=eReal.id||p.estudianteId||"";
-  const payload=JSON.stringify({
-    action:"ponencia_nueva",sheetId:SHEETS_ID,
-    estudiante:nomReal,estudianteId:idReal,
-    correo:correoReal,correosNotif:correos,
-    evento:p.evento,fecha:p.fecha,titulo:p.titulo,
-    fechaEnvio:p.fechaEnvio,ts:Date.now()
-  });
-  try{fetch(url,{method:"POST",mode:"no-cors",body:payload}).catch(()=>{});}catch(e){}
   const s=document.createElement("script");
   s.src=url
     +"?callback=_sc&action=ponencia_nueva"
