@@ -2720,6 +2720,9 @@ function subirPonencia(){
       document.getElementById("card-ponencia-upload").style.display="none";
       renderPonencias();
       renderDashEstudiante();
+      // Forzar re-render del módulo activo
+      const modActivo=document.querySelector('.na.active');
+      if(modActivo&&modActivo.id==='nav-ponencias') renderPonencias();
       const mc=document.createElement("div");
       mc.style.cssText="position:fixed;inset:0;background:rgba(0,32,96,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
       mc.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;padding:32px 28px;text-align:center;box-shadow:0 8px 40px rgba(0,32,96,.18)">
@@ -2747,7 +2750,7 @@ function notificarPonencia(p){
     evento:p.evento,fecha:p.fecha,titulo:p.titulo,
     fechaEnvio:p.fechaEnvio,ts:Date.now()
   });
-  try{fetch(url,{method:"POST",mode:"no-cors",body:payload}).catch(()=>{});}catch(e){}
+  try{fetch(url,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},body:payload}).catch(()=>{});}catch(e){}
   const s=document.createElement("script");
   s.src=url
     +"?callback=_sc&action=ponencia_nueva"
@@ -2768,8 +2771,23 @@ function verificarPonencia(i){
   ST.ponencias[i].estado="verificado";
   ST.ponencias[i].fechaVerificacion=new Date().toLocaleString("es-CO");
   saveSt(ST);
-  notificarVerificacionPonencia(ST.ponencias[i]);
-  syncEstadoPonenciaSheets(ST.ponencias[i]);
+  // Actualizar Sheets inmediatamente via POST + JSONP
+  const p=ST.ponencias[i];
+  const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
+  if(url){
+    // POST
+    fetch(url,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},
+      body:JSON.stringify({action:"ponencia_verificada",estudianteId:p.estudianteId,
+        estudiante:p.estudianteNombre||p.estudiante||"",ts:Date.now()})}).catch(()=>{});
+    // JSONP fallback
+    const s=document.createElement("script");
+    s.src=url+"?callback=_sc&action=ponencia_verificada"
+      +"&estudianteId="+encodeURIComponent(p.estudianteId||"")
+      +"&estudiante="+encodeURIComponent(p.estudianteNombre||p.estudiante||"")
+      +"&ts="+Date.now();
+    document.head.appendChild(s);
+    setTimeout(()=>{try{document.head.removeChild(s);}catch(e){}},8000);
+  }
   toast("✅ Ponencia verificada — requisito cumplido","ok");
   renderPonencias();
   renderDash();
