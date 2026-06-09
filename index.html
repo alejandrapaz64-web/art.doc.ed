@@ -2731,6 +2731,7 @@ function renderPonencias(){
           ${(_ponArchivos.get(p.estudianteId)||{}).avalBase64||p.avalBase64?`<button class="btn bs bsm" onclick="verDocPonencia(${i},'aval')">📄 Ver aval</button>`:''}
           ${p.estado!=='verificado'?`<button class="btn bsm" style="background:var(--verdeb);color:var(--verde);border:1px solid #A3C97C" onclick="verificarPonencia(${i})">✅ Verificar · 100%</button>`:''}
           ${p.estado!=='rechazado'?`<button class="btn bd bsm" onclick="rechazarPonencia(${i})">❌ Rechazar</button>`:''}
+          <button class="btn bsm" style="background:#FEE2E2;color:#9B1C1C;border:1px solid #FCA5A5;margin-left:auto" onclick="eliminarPonencia(${i})">🗑️ Eliminar</button>
         </div>
       </div>`).join(''):'<p style="color:var(--txt3);font-size:.8rem;padding:10px 0">No hay ponencias enviadas aún.</p>';
   }
@@ -2894,6 +2895,31 @@ function rechazarPonencia(i){
     setTimeout(()=>{try{document.head.removeChild(s);}catch(e){}},5000);
   }
   toast("Ponencia rechazada · El estudiante debe volver a subir los soportes","ok");
+  renderPonencias();
+  renderDash();
+  renderDashPonencias();
+}
+
+// ══════════════════════════════════════
+//  ELIMINAR PONENCIA
+// ══════════════════════════════════════
+function eliminarPonencia(i){
+  const p=ST.ponencias[i];if(!p)return;
+  if(!confirm("¿Eliminar esta ponencia de "+(p.estudianteNombre||"este estudiante")+"? Se eliminará del sistema y del registro. El estudiante podrá volver a enviar."))return;
+  const idEst=p.estudianteId;
+  ST.ponencias.splice(i,1);
+  saveSt(ST);
+  try{localStorage.removeItem(SK_PON_ARCH+idEst);}catch(e){}
+  const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
+  if(url){
+    const s=document.createElement("script");
+    s.src=url+"?callback=_sc&action=ponencia_eliminar"
+      +"&estudianteId="+encodeURIComponent(idEst||"")
+      +"&ts="+Date.now();
+    document.head.appendChild(s);
+    setTimeout(()=>{try{document.head.removeChild(s);}catch(e){}},5000);
+  }
+  toast("Ponencia eliminada · El estudiante puede volver a enviar","ok");
   renderPonencias();
   renderDash();
   renderDashPonencias();
