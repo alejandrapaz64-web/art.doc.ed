@@ -1289,6 +1289,12 @@ function renderDashPonencias(){
 
 function generarCertificadoPonencia(i){
   const p=ST.ponencias[i];if(!p)return;
+  // Seguridad: si es estudiante, solo puede descargar su propio certificado
+  if(rolActual==="estudiante"){
+    const e=estSesion||ST.estudiantes[0];
+    if(!e||p.estudianteId!==e.id){toast("Solo puede descargar su propio certificado","err");return;}
+    if(p.estado!=="verificado"){toast("Su ponencia aún no ha sido verificada","err");return;}
+  }
   const nombre=p.estudianteNombre||p.estudiante||"";
   const evento=p.evento||"";
   const titulo=p.titulo||"";
@@ -1300,11 +1306,13 @@ function generarCertificadoPonencia(i){
   const W=215.9,H=279.4;
   // Encabezado azul
   doc.setFillColor(0,32,96);doc.rect(0,0,W,30,"F");
-  // Logo
+  // Logo con fondo blanco redondeado
+  doc.setFillColor(255,255,255);
+  doc.roundedRect(6,3,42,24,3,3,"F");
   try{
     var img=new Image();
     img.src="data:image/png;base64,"+LOGO_B64;
-    doc.addImage(img,"PNG",8,4,36,22);
+    doc.addImage(img,"PNG",7,4,40,22);
   }catch(err){}
   // Texto encabezado
   doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(255,255,255);
@@ -2586,7 +2594,7 @@ function getCorreosNotif(){
 
 function renderPonencias(){
   const esEstud=rolActual==="estudiante";
-  const esCoord=["coordinadora","direccion"].includes(rolActual);
+  const esCoord=["coordinadora","direccion","director"].includes(rolActual);
   const cardUp=document.getElementById("card-ponencia-upload");
   const cardCo=document.getElementById("card-ponencias-coordinadora");
   if(cardUp) cardUp.style.display=esEstud?"block":"none";
@@ -2628,7 +2636,13 @@ function renderPonencias(){
         <div style="font-size:.75rem;margin-top:4px;color:var(--txt2)">Complete el formulario de abajo para subir el certificado y el aval institucional.</div>
       </div>`}`;
   } else if(esCoord){
-    const todas=ST.ponencias||[];
+    let todas=ST.ponencias||[];
+    // Director de línea: filtrar solo sus estudiantes
+    if(rolActual==="director"){
+      const dirUser=usuarioActual;
+      const misEstudiantes=(ST.estudiantes||[]).filter(e=>e.director&&e.director.toLowerCase()===dirUser.nombre.toLowerCase()).map(e=>e.id);
+      todas=todas.filter(p=>misEstudiantes.includes(p.estudianteId));
+    }
     res.innerHTML=`<div class="kg kg4" style="margin-bottom:0">
       <div class="kpi"><div class="kv">${todas.length}</div><div class="kl">Enviadas</div></div>
       <div class="kpi" style="border-left-color:var(--verde)"><div class="kv">${todas.filter(p=>p.estado==='verificado').length}</div><div class="kl">Verificadas</div></div>
@@ -2702,10 +2716,20 @@ function subirPonencia(){
       ["ponEvento","ponTitulo","ponFecha"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
       ["ponCertFile","ponAvalFile"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
       document.getElementById("card-ponencia-upload").style.display="none";
-      toast("✅ Soportes enviados · La coordinación recibirá notificación","ok");
       renderPonencias();
       renderDashEstudiante();
-      irA("ponencias",document.getElementById("nav-ponencias"));
+      const mc=document.createElement("div");
+      mc.style.cssText="position:fixed;inset:0;background:rgba(0,32,96,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
+      mc.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;padding:32px 28px;text-align:center;box-shadow:0 8px 40px rgba(0,32,96,.18)">
+        <div style="font-size:2.2rem;margin-bottom:8px">📋</div>
+        <div style="font-weight:700;font-size:1.1rem;color:#002060;margin-bottom:10px">Soportes enviados exitosamente</div>
+        <p style="font-size:.85rem;color:#374263;line-height:1.6;margin-bottom:14px">Sus documentos han sido recibidos por la <strong>Coordinación Académica del Doctorado en Educación</strong> de la Universidad de La Sabana.<br><br>El proceso de verificación tomará máximo <strong>5 días hábiles</strong>. Una vez revisados, su estado de ponencia se actualizará en este sistema.</p>
+        <div style="background:#F0F6FF;border-radius:8px;padding:10px 14px;font-size:.78rem;color:#185FA5;margin-bottom:18px;text-align:left">
+          <strong>Próximos pasos:</strong><br>La Coordinación revisará el certificado y el aval institucional. En caso de observaciones, se le notificará para reenviar los soportes.
+        </div>
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="background:#002060;color:#fff;border:none;border-radius:8px;padding:10px 32px;font-weight:700;font-size:.9rem;cursor:pointer">Entendido</button>
+      </div>`;
+      document.body.appendChild(mc);
     });
   });
 }
@@ -2721,9 +2745,7 @@ function notificarPonencia(p){
     evento:p.evento,fecha:p.fecha,titulo:p.titulo,
     fechaEnvio:p.fechaEnvio,ts:Date.now()
   });
-  // POST directo - funciona desde GitHub Pages
-  fetch(url,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},body:payload}).catch(()=>{});
-  // JSONP como respaldo
+  try{fetch(url,{method:"POST",mode:"no-cors",body:payload}).catch(()=>{});}catch(e){}
   const s=document.createElement("script");
   s.src=url
     +"?callback=_sc&action=ponencia_nueva"
@@ -2736,7 +2758,7 @@ function notificarPonencia(p){
     +"&correosNotif="+encodeURIComponent(correos)
     +"&ts="+Date.now();
   document.head.appendChild(s);
-  setTimeout(()=>{try{document.head.removeChild(s);}catch(e){}},8000);
+  setTimeout(()=>{try{document.head.removeChild(s);}catch(e){}},5000);
 }
 
 function verificarPonencia(i){
@@ -2745,9 +2767,22 @@ function verificarPonencia(i){
   ST.ponencias[i].fechaVerificacion=new Date().toLocaleString("es-CO");
   saveSt(ST);
   notificarVerificacionPonencia(ST.ponencias[i]);
+  syncEstadoPonenciaSheets(ST.ponencias[i]);
   toast("✅ Ponencia verificada — requisito cumplido","ok");
   renderPonencias();
   renderDash();
+}
+
+function syncEstadoPonenciaSheets(p){
+  const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
+  if(!url)return;
+  const payload=JSON.stringify({
+    action:"ponencia_verificada",sheetId:SHEETS_ID,
+    estudianteId:p.estudianteId,
+    estudiante:p.estudianteNombre||p.estudiante||"",
+    ts:Date.now()
+  });
+  fetch(url,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},body:payload}).catch(()=>{});
 }
 
 function generarCertificadoPonenciaProppia(){
