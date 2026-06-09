@@ -1011,11 +1011,17 @@ function doLogin(){
   // Estudiante actual (si es estudiante)
   estSesion = null;
   if(rolFinal==="estudiante"){
-    // Buscar por estId vinculado al usuario, o por correo
     const uu=ST.usuarios.find(function(u){return u.usuario===email;});
     if(uu&&uu.estId) estSesion=ST.estudiantes.find(function(e){return e.id===uu.estId;})||null;
     if(!estSesion&&uu&&uu.correo) estSesion=ST.estudiantes.find(function(e){return e.correo===uu.correo;})||null;
-    if(!estSesion) estSesion=ST.estudiantes[0]||null;
+    if(!estSesion&&uu&&uu.nombre) estSesion=ST.estudiantes.find(function(e){return e.nombre===uu.nombre;})||null;
+    // Fallback: buscar por usuario (login) vs nombre normalizado del estudiante
+    if(!estSesion&&uu){
+      const uNorm=(uu.nombre||"").toLowerCase().replace(/[^a-z]/g,"");
+      estSesion=ST.estudiantes.find(function(e){
+        return (e.nombre||"").toLowerCase().replace(/[^a-z]/g,"").startsWith(uNorm.substring(0,8));
+      })||null;
+    }
   }
 
   // Guardar URL del script automáticamente
@@ -2797,7 +2803,7 @@ function notificarPonencia(p){
   const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
   if(!url)return;
   const correos=getCorreosNotif().join(',');
-  const eReal=estSesion||ST.estudiantes[0]||{};
+  const eReal=estSesion||ST.estudiantes.find(function(e){return e.id===p.estudianteId;})||ST.estudiantes[0]||{};
   const nomReal=eReal.nombre||p.estudianteNombre||"";
   const correoReal=eReal.correo||p.estudianteCorreo||"";
   const idReal=eReal.id||p.estudianteId||"";
