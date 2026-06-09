@@ -2739,15 +2739,18 @@ function verDocPonencia(i,tipo){
   const p=ST.ponencias[i];if(!p)return;
   const arch=_ponArchivos.get(p.estudianteId)||{};
   const b64=tipo==='cert'?(p.certBase64||arch.certBase64):(p.avalBase64||arch.avalBase64);
-  const mime=tipo==='cert'?(p.certTipo||arch.certTipo||''):(p.avalTipo||arch.avalTipo||'');
+  const mime=tipo==='cert'?(p.certTipo||arch.certTipo||'application/pdf'):(p.avalTipo||arch.avalTipo||'application/pdf');
   if(!b64){toast("Documento no disponible. El estudiante debe reenviar los soportes.","err");return;}
-  const w=window.open('','_blank');
-  if(mime.includes('pdf')){
-    w.document.write('<!DOCTYPE html><html><body style="margin:0"><iframe src="data:application/pdf;base64,'+b64+'" style="width:100%;height:100vh;border:none"></iframe></body></html>');
-  } else {
-    w.document.write('<!DOCTYPE html><html><body style="margin:0;background:#111;text-align:center"><img src="data:'+(mime||'image/jpeg')+';base64,'+b64+'" style="max-width:100%;height:auto"/></body></html>');
-  }
-  w.document.close();
+  try{
+    const bytes=atob(b64);
+    const arr=new Uint8Array(bytes.length);
+    for(let i=0;i<bytes.length;i++) arr[i]=bytes.charCodeAt(i);
+    const blob=new Blob([arr],{type:mime});
+    const url=URL.createObjectURL(blob);
+    const w=window.open(url,'_blank');
+    if(!w) toast("Permita ventanas emergentes para ver el documento.","err");
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }catch(err){toast("Error al abrir el documento.","err");console.error(err);}
 }
 
 function subirPonencia(){
