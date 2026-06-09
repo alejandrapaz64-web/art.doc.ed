@@ -908,6 +908,22 @@ function setLogos(){
 // ══════════════════════════════════════
 const SK = "scitrack4";
 function loadSt(){return JSON.parse(localStorage.getItem(SK)||"null")||{estudiantes:[],articulos:[],usuarios:[],config:{arts:2,estado:"aceptado",cuartiles:"Q1,Q2",meses:6},sheetsUrl:""};}
+
+function parseCohorteFecha(val){
+  if(!val) return "";
+  // If it's already a formatted cohorte like "2022-2" or "2023-1", return as is
+  if(/^\d{4}-\d$/.test(val.trim())) return val.trim();
+  // If it looks like a date string, extract year and determine semester
+  const d = new Date(val);
+  if(!isNaN(d.getTime())){
+    const yr = d.getFullYear();
+    const mo = d.getMonth()+1; // 1-12
+    const sem = mo <= 6 ? 1 : 2;
+    return yr + "-" + sem;
+  }
+  return val;
+}
+
 function saveSt(st){localStorage.setItem(SK,JSON.stringify(st));}
 let ST = loadSt();
 
@@ -1950,7 +1966,7 @@ async function cargarDesdeSheets(){
     if(idx.nombre_completo===undefined) return;
     const cargados=rows.map(r=>({
       nombre:r[idx.nombre_completo]||"",id:r[idx.id_codigo]||"",correo:r[idx.correo]||"",
-      cohorte:r[idx.cohorte]||"",linea:r[idx.linea]||"L1",director:r[idx.director]||"",
+      cohorte:parseCohorteFecha(r[idx.cohorte]||""),linea:r[idx.linea]||"L1",director:r[idx.director]||"",
       tesis:r[idx.titulo_tesis]||"",estado:r[idx.estado]||"pendiente",
       arts:parseInt(r[idx.articulos_validos])||0
     })).filter(e=>e.nombre&&e.id);
@@ -1998,7 +2014,7 @@ async function sincSheets(silencioso=false,urlParam=null){
     const idx={};
     Object.entries(m).forEach(([k,al])=>{const f=al.find(a=>headers.includes(a));if(f!==undefined)idx[k]=headers.indexOf(f);});
     if(idx.nombre_completo===undefined||idx.id_codigo===undefined)throw new Error("Columnas requeridas no encontradas: nombre_completo, id_codigo");
-    const nuevos=rows.map(r=>({nombre:r[idx.nombre_completo]||"",id:r[idx.id_codigo]||"",correo:r[idx.correo]||"",cohorte:r[idx.cohorte]||"",linea:r[idx.linea]||"L1",director:r[idx.director]||"",tesis:r[idx.titulo_tesis]||"",estado:r[idx.estado]||"pendiente",arts:parseInt(r[idx.articulos_validos])||0})).filter(e=>e.nombre&&e.id);
+    const nuevos=rows.map(r=>({nombre:r[idx.nombre_completo]||"",id:r[idx.id_codigo]||"",correo:r[idx.correo]||"",cohorte:parseCohorteFecha(r[idx.cohorte]||""),linea:r[idx.linea]||"L1",director:r[idx.director]||"",tesis:r[idx.titulo_tesis]||"",estado:r[idx.estado]||"pendiente",arts:parseInt(r[idx.articulos_validos])||0})).filter(e=>e.nombre&&e.id);
     ST.estudiantes=nuevos;
     ST.sheetsUrl=url;
     saveSt(ST);
@@ -2665,8 +2681,8 @@ function renderPonencias(){
           <span class="b ${p.estado==='verificado'?'bve':p.estado==='rechazado'?'bro':'bam'}">${p.estado==='verificado'?'✅ Verificada':p.estado==='rechazado'?'❌ Rechazada':'⏳ Pendiente'}</span>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-          ${p.certBase64?`<button class="btn bs bsm" onclick="verDocPonencia(${i},'cert')">📄 Ver certificado</button>`:''}
-          ${p.avalBase64?`<button class="btn bs bsm" onclick="verDocPonencia(${i},'aval')">📄 Ver aval</button>`:''}
+          ${p.certBase64&&["coordinadora","direccion","director"].includes(rolActual)?`<button class="btn bs bsm" onclick="verDocPonencia(${i},'cert')">📄 Ver certificado</button>`:''}
+          ${p.avalBase64&&["coordinadora","direccion","director"].includes(rolActual)?`<button class="btn bs bsm" onclick="verDocPonencia(${i},'aval')">📄 Ver aval</button>`:''}
           ${p.estado!=='verificado'?`<button class="btn bsm" style="background:var(--verdeb);color:var(--verde);border:1px solid #A3C97C" onclick="verificarPonencia(${i})">✅ Verificar · 100%</button>`:''}
           ${p.estado!=='rechazado'?`<button class="btn bd bsm" onclick="rechazarPonencia(${i})">❌ Rechazar</button>`:''}
         </div>
@@ -2720,9 +2736,6 @@ function subirPonencia(){
       document.getElementById("card-ponencia-upload").style.display="none";
       renderPonencias();
       renderDashEstudiante();
-      // Forzar re-render del módulo activo
-      const modActivo=document.querySelector('.na.active');
-      if(modActivo&&modActivo.id==='nav-ponencias') renderPonencias();
       const mc=document.createElement("div");
       mc.style.cssText="position:fixed;inset:0;background:rgba(0,32,96,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
       mc.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;padding:32px 28px;text-align:center;box-shadow:0 8px 40px rgba(0,32,96,.18)">
@@ -2750,7 +2763,7 @@ function notificarPonencia(p){
     evento:p.evento,fecha:p.fecha,titulo:p.titulo,
     fechaEnvio:p.fechaEnvio,ts:Date.now()
   });
-  try{fetch(url,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},body:payload}).catch(()=>{});}catch(e){}
+  try{fetch(url,{method:"POST",mode:"no-cors",body:payload}).catch(()=>{});}catch(e){}
   const s=document.createElement("script");
   s.src=url
     +"?callback=_sc&action=ponencia_nueva"
@@ -2771,23 +2784,8 @@ function verificarPonencia(i){
   ST.ponencias[i].estado="verificado";
   ST.ponencias[i].fechaVerificacion=new Date().toLocaleString("es-CO");
   saveSt(ST);
-  // Actualizar Sheets inmediatamente via POST + JSONP
-  const p=ST.ponencias[i];
-  const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
-  if(url){
-    // POST
-    fetch(url,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},
-      body:JSON.stringify({action:"ponencia_verificada",estudianteId:p.estudianteId,
-        estudiante:p.estudianteNombre||p.estudiante||"",ts:Date.now()})}).catch(()=>{});
-    // JSONP fallback
-    const s=document.createElement("script");
-    s.src=url+"?callback=_sc&action=ponencia_verificada"
-      +"&estudianteId="+encodeURIComponent(p.estudianteId||"")
-      +"&estudiante="+encodeURIComponent(p.estudianteNombre||p.estudiante||"")
-      +"&ts="+Date.now();
-    document.head.appendChild(s);
-    setTimeout(()=>{try{document.head.removeChild(s);}catch(e){}},8000);
-  }
+  notificarVerificacionPonencia(ST.ponencias[i]);
+  syncEstadoPonenciaSheets(ST.ponencias[i]);
   toast("✅ Ponencia verificada — requisito cumplido","ok");
   renderPonencias();
   renderDash();
@@ -2821,6 +2819,21 @@ function rechazarPonencia(i){
   ST.ponencias[i].estado="rechazado";
   ST.ponencias[i].observacion=obs;
   saveSt(ST);
+  // Sync rechazo al GAS/Sheets
+  const p=ST.ponencias[i];
+  const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
+  if(url){
+    fetch(url,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},
+      body:JSON.stringify({action:"ponencia_rechazada",estudianteId:p.estudianteId,
+        estudiante:p.estudianteNombre||p.estudiante||"",observacion:obs,ts:Date.now()})}).catch(()=>{});
+    const s=document.createElement("script");
+    s.src=url+"?callback=_sc&action=ponencia_rechazada"
+      +"&estudianteId="+encodeURIComponent(p.estudianteId||"")
+      +"&estudiante="+encodeURIComponent(p.estudianteNombre||p.estudiante||"")
+      +"&ts="+Date.now();
+    document.head.appendChild(s);
+    setTimeout(()=>{try{document.head.removeChild(s);}catch(e){}},5000);
+  }
   toast("Ponencia rechazada · El estudiante debe volver a subir los soportes","ok");
   renderPonencias();
 }
