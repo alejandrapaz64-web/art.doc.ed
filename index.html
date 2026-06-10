@@ -815,6 +815,9 @@ code{background:#F1F5F9;border:1px solid var(--borde);border-radius:5px;padding:
         <div class="ff"><label>DOI (si está publicado)</label><input type="text" id="artDoi" placeholder="10.xxxx/xxxxx"/></div>
         <div class="ff full"><label>Palabras clave</label><input type="text" id="artKeywords" placeholder="Separadas por coma"/></div>
         <div class="ff full"><label>Resumen breve</label><textarea id="artResumen" placeholder="Resumen del artículo (opcional)" rows="2"></textarea></div>
+        <div class="ff full"><label>🔗 Link del artículo (URL de la revista o repositorio)</label><input type="url" id="artLink" placeholder="https://doi.org/... o URL de la revista"/></div>
+        <div class="ff"><label>📎 Adjunto 1 — Pantallazo envío a revista (PDF/imagen · máx. 5MB)</label><input type="file" id="artAdj1" accept=".pdf,.png,.jpg,.jpeg"/></div>
+        <div class="ff"><label>📎 Adjunto 2 — Carta de aceptación o aprobación (PDF/imagen · máx. 5MB)</label><input type="file" id="artAdj2" accept=".pdf,.png,.jpg,.jpeg"/></div>
         <input type="hidden" id="artAutorNombre"/>
         <input type="hidden" id="artAutorCodigo"/>
       </div>
@@ -907,9 +910,13 @@ function setLogos(){
 //  STORAGE
 // ══════════════════════════════════════
 const SK = "scitrack4";
-const SK_PON_ARCH = "scitrack_pon_arch_"; // prefijo clave por estudianteId
+const SK_PON_ARCH = "scitrack_pon_arch_";
+const SK_ART_ARCH = "scitrack_art_arch_"; // prefijo clave por estudianteId
 function savePonArch(idEst,data){try{localStorage.setItem(SK_PON_ARCH+idEst,JSON.stringify(data));}catch(e){console.warn("savePonArch error",e);}}
 function loadPonArch(idEst){try{return JSON.parse(localStorage.getItem(SK_PON_ARCH+idEst)||"null")||null;}catch(e){return null;}}
+function saveArtArch(key,data){try{localStorage.setItem(SK_ART_ARCH+key,JSON.stringify(data));}catch(e){console.warn("saveArtArch error",e);}}
+function loadArtArch(key){try{return JSON.parse(localStorage.getItem(SK_ART_ARCH+key)||"null")||null;}catch(e){return null;}}
+function artArchKey(a){return (a.autorId||a.autorCodigo||"")+"_"+(a.titulo||"").substring(0,20).replace(/\s/g,"");}
 // Compatibilidad: _ponArchivos ahora lee/escribe en localStorage por clave separada
 const _ponArchivos={
   _cache:{},
@@ -1539,7 +1546,32 @@ function filtrarArts(q){
   });
   renderArtsAdmin();
 }
-function renderArts(){artsFiltAdmin=ST.articulos.slice();renderArtsAdmin();}
+function verAdjArt(key,num){
+  const arch=loadArtArch(key);if(!arch)return;
+  const b64=num===1?arch.adj1b64:arch.adj2b64;
+  const mime=num===1?(arch.adj1mime||'application/pdf'):(arch.adj2mime||'application/pdf');
+  if(!b64){toast("Adjunto no disponible","err");return;}
+  try{
+    const bytes=atob(b64);const arr=new Uint8Array(bytes.length);
+    for(let i=0;i<bytes.length;i++) arr[i]=bytes.charCodeAt(i);
+    const blob=new Blob([arr],{type:mime});
+    const url=URL.createObjectURL(blob);
+    const w=window.open(url,'_blank');
+    if(!w)toast("Permita ventanas emergentes para ver el adjunto.","err");
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }catch(err){toast("Error al abrir el adjunto.","err");console.error(err);}
+}
+
+function renderArts(){
+  // Director de línea: solo sus estudiantes
+  if(rolActual==="director"&&usuarioActual){
+    const misEstIds=(ST.estudiantes||[]).filter(e=>e.director&&e.director.toLowerCase()===(usuarioActual.nombre||"").toLowerCase()).map(e=>e.id);
+    artsFiltAdmin=ST.articulos.filter(a=>misEstIds.includes(a.autorId)||misEstIds.includes(a.autorCodigo));
+  } else {
+    artsFiltAdmin=ST.articulos.slice();
+  }
+  renderArtsAdmin();
+}
 function renderArtsAdmin(){
   const list=document.getElementById("artsListAdmin");
   if(!list)return;
@@ -1567,8 +1599,11 @@ function renderArtsAdmin(){
         ${a.autorCodigo?`<span style="color:var(--txt3);font-family:monospace;font-size:.68rem">· ${a.autorCodigo}</span>`:""}
       </div>
       ${a.doi?`<div style="font-size:.7rem;color:var(--azulm);margin-bottom:4px">🔗 DOI: ${a.doi}</div>`:""}
+      ${a.link?`<div style="font-size:.7rem;margin-bottom:4px">🌐 <a href="${a.link}" target="_blank" style="color:var(--azulm);word-break:break-all">${a.link}</a></div>`:""}
       ${a.obs_director?`<div style="font-size:.71rem;color:var(--ambar);background:var(--ambarb);border-radius:6px;padding:5px 9px;margin-bottom:6px">💬 Director: ${a.obs_director}</div>`:""}
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+        ${loadArtArch(artArchKey(a))&&loadArtArch(artArchKey(a)).adj1b64?`<button class="btn bs bsm" onclick="verAdjArt('${artArchKey(a)}',1)">📄 Ver adjunto 1</button>`:""}
+        ${loadArtArch(artArchKey(a))&&loadArtArch(artArchKey(a)).adj2b64?`<button class="btn bs bsm" onclick="verAdjArt('${artArchKey(a)}',2)">📄 Ver adjunto 2</button>`:""}
         ${(esCoord||esDir)&&a.aprobado!=="aprobado"?`
           <button class="btn bsm" style="background:var(--verdeb);color:var(--verde);border:1px solid #A3C97C" onclick="validarArt(${ri},'aprobado')">✅ Aprobar</button>
           <button class="btn bsm" style="background:var(--rojob);color:var(--rojo);border:1px solid #FCA5A5" onclick="abrirRechazar(${ri})">❌ Rechazar</button>
@@ -1596,6 +1631,7 @@ function editarArt(i){
   document.getElementById("artDoi").value=a.doi||"";
   document.getElementById("artKeywords").value=a.keywords||"";
   document.getElementById("artResumen").value=a.resumen||"";
+  const artLinkEl=document.getElementById("artLink");if(artLinkEl)artLinkEl.value=a.link||"";
   const autorSel=document.getElementById("artAutor");
   if(autorSel&&a.autorId) autorSel.value=a.autorId;
   const an=document.getElementById("artAutorNombre");if(an)an.value=a.autorNombre||"";
@@ -1606,19 +1642,41 @@ function editarArt(i){
 function eliminarArt(i){
   const a=ST.articulos[i];
   if(!confirm(`¿Eliminar DEFINITIVAMENTE el artículo:\n"${a.titulo}"\n\nEsta acción no se puede deshacer.`))return;
+  const archKey=artArchKey(a);
   ST.articulos.splice(i,1);
   saveSt(ST);
+  try{localStorage.removeItem(SK_ART_ARCH+archKey);}catch(e){}
   artsFiltAdmin=ST.articulos.slice();
-  renderArtsAdmin();
-  renderDash();
+  renderArtsAdmin();renderDash();
+  const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
+  if(url){
+    const s=document.createElement("script");
+    s.src=url+"?callback=_sc&action=articulo_eliminar"
+      +"&titulo="+encodeURIComponent(a.titulo||"")
+      +"&codigo_autor="+encodeURIComponent(a.autorCodigo||"")
+      +"&ts="+Date.now();
+    document.head.appendChild(s);
+    setTimeout(()=>{try{document.head.removeChild(s);}catch(e){}},5000);
+  }
   toast("Artículo eliminado definitivamente","ok");
 }
 function validarArt(i,decision){
   ST.articulos[i].aprobado=decision;
-  // Si aprobado y estado es en_preparacion, pasa a sometido
   if(decision==="aprobado"&&ST.articulos[i].estado==="en_preparacion") ST.articulos[i].estado="sometido";
-  // Actualizar arts validos del estudiante si aplica
-  saveSt(ST);renderArtsAdmin();
+  saveSt(ST);
+  const a=ST.articulos[i];
+  const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
+  if(url){
+    const s=document.createElement("script");
+    s.src=url+"?callback=_sc&action=articulo_actualizar"
+      +"&titulo="+encodeURIComponent(a.titulo||"")
+      +"&codigo_autor="+encodeURIComponent(a.autorCodigo||"")
+      +"&validacion="+encodeURIComponent(decision)
+      +"&ts="+Date.now();
+    document.head.appendChild(s);
+    setTimeout(()=>{try{document.head.removeChild(s);}catch(e){}},5000);
+  }
+  renderArtsAdmin();
   toast(decision==="aprobado"?"✅ Artículo aprobado · Cuenta para requisito de grado":"❌ Artículo rechazado · El estudiante será notificado","ok");
 }
 function abrirRechazar(i){
@@ -1633,6 +1691,31 @@ function confirmarRechazar(){
   ST.articulos[i].aprobado="rechazado";
   ST.articulos[i].obs_director=obs;
   saveSt(ST);cerrarModal("rechazar");renderArtsAdmin();
+  const a=ST.articulos[i];
+  const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
+  if(url){
+    const s=document.createElement("script");
+    s.src=url+"?callback=_sc&action=articulo_actualizar"
+      +"&titulo="+encodeURIComponent(a.titulo||"")
+      +"&codigo_autor="+encodeURIComponent(a.autorCodigo||"")
+      +"&validacion=rechazado"
+      +"&observacion="+encodeURIComponent(obs)
+      +"&ts="+Date.now();
+    document.head.appendChild(s);
+    setTimeout(()=>{try{document.head.removeChild(s);}catch(e){}},5000);
+    // Si es director de línea → notificar a coordinadora
+    if(rolActual==="director"){
+      const sc=document.createElement("script");
+      sc.src=url+"?callback=_sc&action=articulo_rechazo_director"
+        +"&titulo="+encodeURIComponent(a.titulo||"")
+        +"&autor="+encodeURIComponent(a.autorNombre||"")
+        +"&director="+encodeURIComponent((usuarioActual&&usuarioActual.nombre)||"")
+        +"&observacion="+encodeURIComponent(obs)
+        +"&ts="+Date.now();
+      document.head.appendChild(sc);
+      setTimeout(()=>{try{document.head.removeChild(sc);}catch(e){}},5000);
+    }
+  }
   toast("Artículo rechazado con observación","ok");
 }
 function guardarArt(){
@@ -1645,17 +1728,74 @@ function guardarArt(){
   const autorCodigoH=document.getElementById("artAutorCodigo");
   const autorId=autorSel?autorSel.value:"";
   const autorEst=ST.estudiantes.find(e=>e.id===autorId);
+  const link=(document.getElementById("artLink")||{}).value||"";
   const obj={titulo,revista,estado,cuartil:document.getElementById("artCuartil").value,
     indice:document.getElementById("artIndice").value,seminario:document.getElementById("artSeminario").value,
     fecha:document.getElementById("artFecha").value,doi:document.getElementById("artDoi").value,
     keywords:document.getElementById("artKeywords").value,resumen:document.getElementById("artResumen").value,
+    link:link,
     autorNombre:autorEst?autorEst.nombre:(autorNombreH?autorNombreH.value:""),
     autorCodigo:autorEst?autorEst.id:(autorCodigoH?autorCodigoH.value:""),
     autorId:autorId};
   const idx=document.getElementById("artIdx").value;
-  if(idx!=="")ST.articulos[parseInt(idx)]=obj;
+  const esNuevo=idx==="";
+  if(!esNuevo)ST.articulos[parseInt(idx)]=obj;
   else ST.articulos.unshift(obj);
-  saveSt(ST);cerrarModal("articuloForm");renderArtsAdmin();renderMisArts();toast("Artículo guardado","ok");
+  saveSt(ST);
+  // Guardar adjuntos
+  const adj1File=(document.getElementById("artAdj1")||{}).files&&document.getElementById("artAdj1").files[0];
+  const adj2File=(document.getElementById("artAdj2")||{}).files&&document.getElementById("artAdj2").files[0];
+  const archKey=artArchKey(obj);
+  const readAndSave=()=>{
+    const existing=loadArtArch(archKey)||{};
+    const readF=(file,cb)=>{if(!file){cb(null,null);return;}const r=new FileReader();r.onload=ev=>cb(ev.target.result.split(",")[1],file.type);r.onerror=()=>cb(null,null);r.readAsDataURL(file);};
+    readF(adj1File,(b64,mime)=>{
+      if(b64){existing.adj1b64=b64;existing.adj1mime=mime;}
+      readF(adj2File,(b64b,mimeb)=>{
+        if(b64b){existing.adj2b64=b64b;existing.adj2mime=mimeb;}
+        saveArtArch(archKey,existing);
+      });
+    });
+  };
+  readAndSave();
+  // Sync al GAS
+  const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
+  if(url){
+    const accion=esNuevo?"articulo_nuevo":"articulo_actualizar";
+    const s=document.createElement("script");
+    s.src=url+"?callback=_sc&action="+accion
+      +"&titulo="+encodeURIComponent(titulo)
+      +"&autor="+encodeURIComponent(obj.autorNombre||"")
+      +"&codigo_autor="+encodeURIComponent(obj.autorCodigo||"")
+      +"&revista="+encodeURIComponent(revista)
+      +"&cuartil="+encodeURIComponent(obj.cuartil||"")
+      +"&indice="+encodeURIComponent(obj.indice||"")
+      +"&estado_editorial="+encodeURIComponent(estado)
+      +"&doi="+encodeURIComponent(obj.doi||"")
+      +"&link="+encodeURIComponent(link)
+      +"&fecha="+encodeURIComponent(obj.fecha||"")
+      +"&ts="+Date.now();
+    document.head.appendChild(s);
+    setTimeout(()=>{try{document.head.removeChild(s);}catch(e){}},5000);
+    // Correo solo si es nuevo
+    if(esNuevo){
+      const sc=document.createElement("script");
+      sc.src=url+"?callback=_sc&action=articulo_correo_nuevo"
+        +"&titulo="+encodeURIComponent(titulo)
+        +"&autor="+encodeURIComponent(obj.autorNombre||"")
+        +"&revista="+encodeURIComponent(revista)
+        +"&estado="+encodeURIComponent(estado)
+        +"&director="+encodeURIComponent(autorEst?autorEst.director||"":"")
+        +"&link="+encodeURIComponent(link)
+        +"&ts="+Date.now();
+      document.head.appendChild(sc);
+      setTimeout(()=>{try{document.head.removeChild(sc);}catch(e){}},5000);
+    }
+  }
+  cerrarModal("articuloForm");renderArtsAdmin();renderMisArts();
+  // Limpiar adjuntos del form
+  ["artAdj1","artAdj2","artLink"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+  toast("Artículo guardado","ok");
   document.getElementById("artFormTitle").textContent="Registrar artículo científico";
   document.getElementById("artIdx").value="";
 }
@@ -1720,8 +1860,9 @@ function renderMiAvance(){
 // ── REPOSITORIO ──
 function filtrarRepo(q){
   const pub=ST.articulos.filter(a=>a.estado==="publicado"&&(!q||(a.titulo+a.revista).toLowerCase().includes(q.toLowerCase())));
-  document.getElementById("repoList").innerHTML=pub.length?pub.map(a=>`
-    <div class="acard">
+  document.getElementById("repoList").innerHTML=pub.length?pub.map(a=>{
+    const arch=loadArtArch(artArchKey(a))||{};
+    return`<div class="acard">
       <div class="acard-t">${a.titulo}</div>
       <div class="acard-m">
         <span class="b baz">${a.cuartil||"Q2"}</span><span class="b bte">${a.indice||"Scopus"}</span>
@@ -1729,9 +1870,15 @@ function filtrarRepo(q){
         <span style="font-size:.7rem;font-style:italic;color:var(--txt2)">${a.revista||""}</span>
         ${a.fecha?`<span style="font-size:.66rem;color:var(--txt3)">${a.fecha}</span>`:""}
       </div>
-      ${a.doi?`<div style="font-size:.7rem;color:var(--azulm);margin-top:3px;">🔗 <a href="https://doi.org/${a.doi}" target="_blank" style="color:var(--azulm)">${a.doi}</a></div>`:""}
+      <div style="font-size:.72rem;color:var(--txt2);margin-bottom:4px">👤 ${a.autorNombre||"—"}</div>
+      ${a.doi?`<div style="font-size:.7rem;color:var(--azulm);margin-top:3px">🔗 DOI: <a href="https://doi.org/${a.doi}" target="_blank" style="color:var(--azulm)">${a.doi}</a></div>`:""}
+      ${a.link?`<div style="font-size:.7rem;margin-top:3px">🌐 <a href="${a.link}" target="_blank" style="color:var(--azulm);word-break:break-all">${a.link}</a></div>`:""}
       ${a.resumen?`<div style="font-size:.72rem;color:var(--txt2);margin-top:6px;line-height:1.5">${a.resumen}</div>`:""}
-    </div>`).join(""):`<p style="color:var(--txt3);font-size:.8rem;padding:10px 0">No hay artículos publicados en el repositorio aún.</p>`;
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        ${arch.adj1b64?`<button class="btn bs bsm" onclick="verAdjArt('${artArchKey(a)}',1)">📄 Ver adjunto 1</button>`:""}
+        ${arch.adj2b64?`<button class="btn bs bsm" onclick="verAdjArt('${artArchKey(a)}',2)">📄 Ver adjunto 2</button>`:""}
+      </div>
+    </div>`;}).join(""):`<p style="color:var(--txt3);font-size:.8rem;padding:10px 0">No hay artículos publicados en el repositorio aún.</p>`;
 }
 function renderRepo(){filtrarRepo("");}
 
