@@ -1901,8 +1901,22 @@ function renderIndicadores(){
     <div class="pb"><div class="pf ${pct>=50?"pfv":pct>0?"pfa":"pfr"}" style="width:${pct}%"></div></div></div>`;}).join(""):`<p style="color:var(--txt3);font-size:.78rem">Sin datos.</p>`;
   const il=document.getElementById("indLinea");
   if(il){const lineas=["L1","L2","L3"];const lnames={L1:"Pedagogía e Infancia",L2:"Institución Educativa",L3:"TIC"};
-    il.innerHTML=lineas.map(l=>{const n=ST.estudiantes.filter(e=>e.linea===l).length;const a=ST.articulos.length;
-      return`<div style="margin-bottom:11px;"><div style="font-size:.74rem;font-weight:600;margin-bottom:4px;">${lnames[l]}</div><div style="display:flex;gap:6px;"><span class="b baz">${n} estudiantes</span></div></div>`;}).join("");}
+    il.innerHTML=lineas.map(l=>{
+      const ests=ST.estudiantes.filter(e=>e.linea===l);
+      const n=ests.length;
+      const estIds=ests.map(e=>e.id);
+      const ponVer=(ST.ponencias||[]).filter(p=>(p.estado==='verificado')&&estIds.includes(p.estudianteId)).length;
+      const ponPend=(ST.ponencias||[]).filter(p=>(p.estado==='pendiente'||p.estado==='Pendiente verificacion'||p.estado==='Pendiente verificación')&&estIds.includes(p.estudianteId)).length;
+      const ponRech=(ST.ponencias||[]).filter(p=>p.estado==='rechazado'&&estIds.includes(p.estudianteId)).length;
+      return`<div style="margin-bottom:14px;">
+        <div style="font-size:.74rem;font-weight:600;margin-bottom:5px;color:var(--azul)">${lnames[l]}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <span class="b baz">${n} estudiante${n!==1?'s':''}</span>
+          <span class="b bve" title="Ponencias verificadas">🎤 ${ponVer} verificada${ponVer!==1?'s':''}</span>
+          ${ponPend>0?`<span class="b bam" title="Ponencias pendientes">⏳ ${ponPend} pendiente${ponPend!==1?'s':''}</span>`:''}
+          ${ponRech>0?`<span class="b bro" title="Ponencias rechazadas">❌ ${ponRech} rechazada${ponRech!==1?'s':''}</span>`:''}
+        </div>
+      </div>`;}).join("");}
 }
 
 // ── ALERTAS ──
