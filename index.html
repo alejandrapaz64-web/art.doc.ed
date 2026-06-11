@@ -79,6 +79,8 @@ body{font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;background:var(--b
 .na.on{background:rgba(255,255,255,0.15);color:#fff;font-weight:600;}
 .na .ic{font-size:14px;width:17px;text-align:center;flex-shrink:0;}
 .nb{margin-left:auto;background:var(--rojo);color:#fff;font-size:9px;font-weight:700;padding:1px 7px;border-radius:20px;}
+.nb-verde{margin-left:auto;background:var(--verde);color:#fff;font-size:9px;font-weight:700;padding:1px 7px;border-radius:20px;}
+.nb-ambar{margin-left:auto;background:#D97706;color:#fff;font-size:9px;font-weight:700;padding:1px 7px;border-radius:20px;}
 .sb-foot{margin-top:auto;padding:12px 14px;border-top:1px solid rgba(255,255,255,0.08);position:relative;z-index:1;}
 .uc{display:flex;align-items:center;gap:8px;}
 .uav{width:31px;height:31px;border-radius:50%;background:linear-gradient(135deg,var(--azulc),var(--azulm));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px;flex-shrink:0;}
@@ -335,11 +337,11 @@ code{background:#F1F5F9;border:1px solid var(--borde);border-radius:5px;padding:
     </div>
     <div class="sb-sec">Módulos</div>
     <button class="na on" onclick="irA('dashboard',this)" id="nav-dashboard"><span class="ic">🏠</span>Dashboard</button>
-    <button class="na" onclick="irA('misarticulos',this)" id="nav-misarticulos" style="display:none"><span class="ic">📄</span>Mis artículos</button>
+    <button class="na" onclick="irA('misarticulos',this)" id="nav-misarticulos" style="display:none"><span class="ic">📄</span>Mis artículos <span id="nbadge-misart" style="display:none;margin-left:auto;font-size:9px;font-weight:700;padding:1px 7px;border-radius:20px;">0</span></button>
     <button class="na" onclick="irA('miavance',this)" id="nav-miavance" style="display:none"><span class="ic">📊</span>Mi avance</button>
-    <button class="na" onclick="irA('estudiantes',this)" id="nav-estudiantes" style="display:none"><span class="ic">👥</span>Estudiantes</button>
-    <button class="na" onclick="irA('articulos',this)" id="nav-articulos" style="display:none"><span class="ic">📄</span>Artículos</button>
-    <button class="na" onclick="irA('ponencias',this)" id="nav-ponencias" style="display:none"><span class="ic">🎤</span>Ponencias</button>
+    <button class="na" onclick="irA('estudiantes',this)" id="nav-estudiantes" style="display:none"><span class="ic">👥</span>Estudiantes <span class="nb" id="nbadge-est" style="display:none">0</span></button>
+    <button class="na" onclick="irA('articulos',this)" id="nav-articulos" style="display:none"><span class="ic">📄</span>Artículos <span class="nb" id="nbadge-art" style="display:none">0</span></button>
+    <button class="na" onclick="irA('ponencias',this)" id="nav-ponencias" style="display:none"><span class="ic">🎤</span>Ponencias <span class="nb" id="nbadge-pon" style="display:none">0</span></button>
     <button class="na" onclick="irA('repositorio',this)" id="nav-repositorio"><span class="ic">📚</span>Repositorio</button>
     <button class="na" onclick="irA('indicadores',this)" id="nav-indicadores" style="display:none"><span class="ic">📊</span>Indicadores</button>
     <button class="na" onclick="irA('alertas',this)" id="nav-alertas" style="display:none"><span class="ic">🔔</span>Alertas <span class="nb" id="nbadge">0</span></button>
@@ -1139,7 +1141,7 @@ function pcls(e){return e==="cumplido"?"pfv":e==="progreso"?"pfa":"pfr";}
 // ══════════════════════════════════════
 //  RENDER PRINCIPAL
 // ══════════════════════════════════════
-function renderAll(){renderDash();renderEst();renderArts();renderRepo();renderIndicadores();renderAlertas2();renderUsers();}
+function renderAll(){renderDash();renderEst();renderArts();renderRepo();renderIndicadores();renderAlertas2();renderUsers();actualizarBadgesMenu();}
 function renderVista(v){
   if(v==="dashboard")renderDash();
   else if(v==="estudiantes")renderEst();
@@ -1278,7 +1280,49 @@ function renderDashAlertas(){
     </div>`).join(""):`<p style="color:var(--txt3);font-size:.78rem">Sin alertas activas.</p>`;
 }
 
-function renderDashDist(){
+function actualizarBadgesMenu(){
+  const esCoord=["coordinadora","direccion","director"].includes(rolActual);
+  const esEst=rolActual==="estudiante";
+
+  if(esCoord){
+    // PONENCIAS: pendientes de verificar
+    const ponPend=(ST.ponencias||[]).filter(p=>p.estado==="pendiente"||p.estado==="Pendiente verificacion"||p.estado==="Pendiente verificación").length;
+    const bPon=document.getElementById("nbadge-pon");
+    if(bPon){bPon.textContent=ponPend;bPon.style.display=ponPend?"inline":"none";bPon.className="nb";}
+
+    // ARTÍCULOS: pendientes de validación
+    const artPend=(ST.articulos||[]).filter(a=>!a.aprobado||a.aprobado==="pendiente").length;
+    const bArt=document.getElementById("nbadge-art");
+    if(bArt){bArt.textContent=artPend;bArt.style.display=artPend?"inline":"none";bArt.className="nb";}
+
+    // ESTUDIANTES: sin ponencia subida
+    const estSinPon=(ST.estudiantes||[]).filter(e=>!(ST.ponencias||[]).some(p=>p.estudianteId===e.id)).length;
+    const bEst=document.getElementById("nbadge-est");
+    if(bEst){bEst.textContent=estSinPon;bEst.style.display=estSinPon?"inline":"none";bEst.className="nb";}
+  }
+
+  if(esEst&&estSesion){
+    // PONENCIAS del estudiante: verde=verificada, rojo=rechazada, ambar=pendiente
+    const ponEst=(ST.ponencias||[]).find(p=>p.estudianteId===estSesion.id);
+    const bPonEst=document.getElementById("nbadge-pon");
+    if(bPonEst){
+      if(ponEst&&ponEst.estado==="verificado"){bPonEst.textContent="✓";bPonEst.style.display="inline";bPonEst.className="nb-verde";}
+      else if(ponEst&&ponEst.estado==="rechazado"){bPonEst.textContent="!";bPonEst.style.display="inline";bPonEst.className="nb";}
+      else if(ponEst&&ponEst.estado==="pendiente"){bPonEst.textContent="…";bPonEst.style.display="inline";bPonEst.className="nb-ambar";}
+      else{bPonEst.style.display="none";}
+    }
+    // ARTÍCULOS del estudiante: verde=aprobado, rojo=rechazado
+    const artsEst=(ST.articulos||[]).filter(a=>a.autorId===estSesion.id||a.autorCodigo===estSesion.id);
+    const artAprobado=artsEst.some(a=>a.aprobado==="aprobado");
+    const artRechazado=artsEst.some(a=>a.aprobado==="rechazado");
+    const bArtEst=document.getElementById("nbadge-misart");
+    if(bArtEst){
+      if(artAprobado){bArtEst.textContent="✓";bArtEst.style.display="inline";bArtEst.style.background="var(--verde)";bArtEst.style.color="#fff";}
+      else if(artRechazado){bArtEst.textContent="!";bArtEst.style.display="inline";bArtEst.style.background="var(--rojo)";bArtEst.style.color="#fff";}
+      else{bArtEst.style.display="none";}
+    }
+  }
+}
   const estados=["publicado","aceptado","en_revision","sometido","en_preparacion","rechazado"];
   const labels={publicado:"Publicado",aceptado:"Aceptado",en_revision:"En revisión",sometido:"Sometido",en_preparacion:"En preparación",rechazado:"Rechazado"};
   const colors={publicado:"var(--verde)",aceptado:"var(--azulm)",en_revision:"#D97706",sometido:"var(--azulc)",en_preparacion:"#94A3B8",rechazado:"var(--rojo)"};
@@ -1310,7 +1354,7 @@ function renderDashPonencias(){
   const lnames={"L1":"Pedagogía e Infancia","L2":"Institución Educativa","L3":"TIC"};
   const lineaStats=lineas.map(l=>{
     const ests=(ST.estudiantes||[]).filter(e=>e.linea===l);
-    const conPon=ests.filter(e=>(ST.ponencias||[]).some(p=>p.estudianteId===e.id)).length;
+    const conPon=ests.filter(e=>(ST.ponencias||[]).some(p=>String(p.estudianteId)===String(e.id))).length;
     return{nombre:lnames[l]||l,total:ests.length,conPon,sinPon:ests.length-conPon};
   }).filter(s=>s.total>0);
   wrap.innerHTML=`
@@ -1686,6 +1730,7 @@ function validarArt(i,decision){
     setTimeout(()=>{try{document.head.removeChild(s);}catch(e){}},5000);
   }
   renderArtsAdmin();
+  actualizarBadgesMenu();
   toast(decision==="aprobado"?"✅ Artículo aprobado · Cuenta para requisito de grado":"❌ Artículo rechazado · El estudiante será notificado","ok");
 }
 function abrirRechazar(i){
@@ -1921,10 +1966,10 @@ function renderIndicadores(){
       const ests=ST.estudiantes.filter(e=>e.linea===l);
       const n=ests.length;
       const estIds=ests.map(e=>e.id);
-      const ponVer=ponTotal.filter(p=>p.estado==="verificado"&&estIds.includes(p.estudianteId));
-      const ponPend=ponTotal.filter(p=>(p.estado==="pendiente"||p.estado==="Pendiente verificacion"||p.estado==="Pendiente verificación")&&estIds.includes(p.estudianteId));
-      const ponRech=ponTotal.filter(p=>p.estado==="rechazado"&&estIds.includes(p.estudianteId));
-      const artsL=artTotal.filter(a=>estIds.includes(a.autorId)||estIds.includes(a.autorCodigo));
+      const ponVer=ponTotal.filter(p=>p.estado==="verificado"&&estIds.map(String).includes(String(p.estudianteId)));
+      const ponPend=ponTotal.filter(p=>(p.estado==="pendiente"||p.estado==="Pendiente verificacion"||p.estado==="Pendiente verificación")&&estIds.map(String).includes(String(p.estudianteId)));
+      const ponRech=ponTotal.filter(p=>p.estado==="rechazado"&&estIds.map(String).includes(String(p.estudianteId)));
+      const artsL=artTotal.filter(a=>estIds.map(String).includes(String(a.autorId))||estIds.map(String).includes(String(a.autorCodigo)));
       const artsQ1=artsL.filter(a=>a.cuartil==="Q1").length;
       const artsQ2=artsL.filter(a=>a.cuartil==="Q2").length;
       const artsPub=artsL.filter(a=>a.estado==="publicado"||a.estado==="aceptado").length;
@@ -3057,6 +3102,7 @@ function verificarPonencia(i){
   renderPonencias();
   renderDash();
   renderDashPonencias();
+  actualizarBadgesMenu();
 }
 
 function syncEstadoPonenciaSheets(p){
@@ -3110,6 +3156,7 @@ function rechazarPonencia(i){
   renderPonencias();
   renderDash();
   renderDashPonencias();
+  actualizarBadgesMenu();
 }
 
 // ══════════════════════════════════════
