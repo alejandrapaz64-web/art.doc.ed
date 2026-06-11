@@ -414,7 +414,7 @@ code{background:#F1F5F9;border:1px solid var(--borde);border-radius:5px;padding:
                 </div>
               </div>
               <div class="tw"><table>
-                <thead><tr><th>Estudiante</th><th>Cohorte</th><th>Línea</th><th>Progreso</th><th>Estado</th></tr></thead>
+                <thead><tr><th>Estudiante</th><th>Cohorte</th><th>Línea</th><th>Progreso arts.</th><th>Estado ponencia</th></tr></thead>
                 <tbody id="dashTbody"></tbody>
               </table></div>
               <div class="pgw"><div class="pgi" id="dashPgI">—</div><div class="pgb" id="dashPgB"></div></div>
@@ -450,10 +450,11 @@ code{background:#F1F5F9;border:1px solid var(--borde);border-radius:5px;padding:
 
       <!-- ══ MI AVANCE (estudiante) ══ -->
       <div class="view" id="v-miavance">
-        <div class="kg kg3">
+        <div class="kg kg4">
           <div class="kpi"><div class="kv" id="maArts">0</div><div class="kl">Artículos registrados</div></div>
           <div class="kpi" style="border-left-color:var(--verde)"><div class="kv" id="maValid">0</div><div class="kl">Válidos para grado</div></div>
           <div class="kpi" style="border-left-color:var(--rojo)"><div class="kv" id="maFalt">2</div><div class="kl">Faltan para cumplir requisito</div></div>
+          <div class="kpi" style="border-left-color:var(--azulm)"><div class="kv" id="maPon">—</div><div class="kl">Estado ponencia</div></div>
         </div>
         <div class="card">
           <div class="ch"><div class="ct2">Estado de mi requisito de graduación</div></div>
@@ -1262,8 +1263,13 @@ function renderDashTabla(){
     <td><span style="font-weight:600">${e.nombre.split(",")[0]||e.nombre}</span></td>
     <td><span class="b bgr">${e.cohorte||"—"}</span></td>
     <td><span class="b baz">${L[e.linea]||e.linea||"—"}</span></td>
-    <td style="min-width:130px">${pbar(e.arts||0,pcls(e.estado))}</td>
-    <td>${(()=>{const pon=(ST.ponencias||[]).find(p=>p.estudianteId===e.id);if(!pon)return'<span class="b bgr" style="color:var(--txt3);font-size:.68rem">Sin subir</span>';if(pon.estado==='verificado')return'<span class="b bve" style="font-size:.68rem">✅ Verificada</span>';if(pon.estado==='rechazado')return'<span class="b bro" style="font-size:.68rem">❌ Rechazada</span>';return'<span class="b bam" style="font-size:.68rem">⏳ Pendiente</span>';})()}</td>
+    <td style="min-width:130px">${(()=>{
+      const artsAprobados=ST.articulos.filter(a=>(String(a.autorId)===String(e.id)||String(a.autorCodigo)===String(e.id))&&a.aprobado==='aprobado').length;
+      const req=ST.config&&ST.config.arts||2;
+      const pct=Math.min(100,Math.round(artsAprobados/req*100));
+      return`<div>${pbar(artsAprobados,pcls(e.estado))}</div><div style="font-size:.68rem;color:var(--txt2);margin-top:2px">${artsAprobados}/${req} aprobados</div>`;
+    })()}</td>
+    <td>${(()=>{const pon=(ST.ponencias||[]).find(p=>String(p.estudianteId)===String(e.id));if(!pon)return'<span class="b bgr" style="color:var(--txt3);font-size:.68rem">Sin subir</span>';if(pon.estado==='verificado')return'<span class="b bve" style="font-size:.68rem">✅ Verificada</span>';if(pon.estado==='rechazado')return'<span class="b bro" style="font-size:.68rem">❌ Rechazada</span>';return'<span class="b bam" style="font-size:.68rem">⏳ Pendiente</span>';})()}</td>
   </tr>`).join("");
   document.getElementById("dashPgI").textContent=`Mostrando ${ini+1}–${fin} de ${dashFilt.length}`;
   const npg=Math.ceil(dashFilt.length/DPPG);
@@ -1296,10 +1302,9 @@ function actualizarBadgesMenu(){
     const bArt=document.getElementById("nbadge-art");
     if(bArt){bArt.textContent=artPend;bArt.style.display=artPend?"inline":"none";bArt.className="nb";}
 
-    // ESTUDIANTES: sin ponencia subida (con String() para consistencia)
-    const estSinPon=(ST.estudiantes||[]).filter(e=>!(ST.ponencias||[]).some(p=>String(p.estudianteId)===String(e.id))).length;
+    // ESTUDIANTES: total activos
     const bEst=document.getElementById("nbadge-est");
-    if(bEst){bEst.textContent=estSinPon;bEst.style.display=estSinPon?"inline":"none";bEst.className="nb";}
+    if(bEst){bEst.textContent=ST.estudiantes.length;bEst.style.display=ST.estudiantes.length?"inline":"none";bEst.className="nb";}
   }
 
   if(esEst&&estSesion){
@@ -1517,7 +1522,7 @@ function renderEstTabla(){
       <td><span class="b baz">${L[e.linea]||e.linea||"—"}</span></td>
       <td style="font-size:.74rem">${e.director||"—"}</td>
       <td style="font-size:.72rem;color:var(--txt2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.tesis||""}">${e.tesis?e.tesis.substring(0,55)+(e.tesis.length>55?"…":""):"—"}</td>
-      <td style="text-align:center;font-weight:700;color:var(--azul)">${e.arts||0}</td>
+      <td style="text-align:center;font-weight:700;color:var(--azul)">${ST.articulos.filter(a=>String(a.autorId)===String(e.id)||String(a.autorCodigo)===String(e.id)).length}</td>
       <td>${(()=>{
         const pon=(ST.ponencias||[]).find(p=>p.estudianteId===e.id);
         if(!pon) return`<span class="b bgr" style="color:var(--txt3)">Sin subir</span>`;
@@ -1564,11 +1569,17 @@ function editarEst(i){
   abrirModal("estForm");
 }
 function eliminarEst(i){
-  if(!confirm("¿Eliminar este estudiante?"))return;
+  if(!confirm("¿Eliminar este estudiante? Se eliminará del sistema y del registro en Sheets."))return;
   const obj=ST.estudiantes[i];
-  ST.estudiantes.splice(i,1);saveSt(ST);
-  syncCompleto();
-  filtrarEst();toast("Eliminado","ok");
+  ST.estudiantes.splice(i,1);saveSt(ST);filtrarEst();renderDash();actualizarBadgesMenu();
+  toast("Estudiante eliminado","ok");
+  _bloqueoCarga=true;
+  syncToSheets("delete",{id:obj.id,nombre:obj.nombre||""});
+  if(window._reloadInterval){clearInterval(window._reloadInterval);}
+  setTimeout(function(){
+    _bloqueoCarga=false;
+    window._reloadInterval=setInterval(function(){cargarDesdeSheets(true);},90000);
+  },20000);
 }
 function guardarEst(){
   const n=document.getElementById("eNombre").value.trim();
@@ -1583,8 +1594,10 @@ function guardarEst(){
   if(idx!=="")ST.estudiantes[parseInt(idx)]=obj;
   else ST.estudiantes.unshift(obj);
   saveSt(ST);
+  if(idx===""){_bloqueoCarga=true;setTimeout(function(){_bloqueoCarga=false;cargarDesdeSheets();},8000);}
   syncToSheets(idx!==""?"update":"add", obj);
-  cerrarModal("estForm");filtrarEst();toast("Estudiante guardado · Sincronizando con Sheets...","ok");
+  cerrarModal("estForm");filtrarEst();renderDash();renderIndicadores();actualizarBadgesMenu();
+  toast("Estudiante guardado · Sincronizando con Sheets...","ok");
   document.getElementById("estFormTitle").textContent="Nuevo estudiante";
   document.getElementById("estIdx").value="";
 }
@@ -1897,6 +1910,13 @@ function renderMiAvance(){
   const pct=Math.min(100,Math.round(valid/req*100));
   // Estado ponencia
   const pon=(ST.ponencias||[]).find(p=>String(p.estudianteId)===String(e.id));
+  const maPonEl=document.getElementById("maPon");
+  if(maPonEl){
+    if(!pon){maPonEl.textContent="Sin subir";maPonEl.style.color="var(--txt3)";}
+    else if(pon.estado==="verificado"){maPonEl.textContent="✅";maPonEl.style.color="var(--verde)";}
+    else if(pon.estado==="rechazado"){maPonEl.textContent="❌";maPonEl.style.color="var(--rojo)";}
+    else{maPonEl.textContent="⏳";maPonEl.style.color="var(--ambar)";}
+  }
   const ponHtml=`
     <div style="margin-top:18px;border-top:1px solid var(--borde);padding-top:14px">
       <div style="font-size:.8rem;font-weight:700;color:var(--txt);margin-bottom:10px">🎤 Obligación académica · Ponencia</div>
@@ -1989,11 +2009,27 @@ function renderIndicadores(){
   if(il){
     const lineas=["L1","L2","L3"];
     const lnames={L1:"Pedagogía e Infancia",L2:"Institución Educativa",L3:"TIC"};
+    // Mapeo de nombres completos a códigos (por si vienen del Sheets)
+    const lineaMap={
+      "L1":"L1","pedagogía e infancia":"L1","pedagogia e infancia":"L1","pedagogía":"L1","pedagogia":"L1",
+      "L2":"L2","institución educativa":"L2","institucion educativa":"L2",
+      "institución educativa, currículo y gestión":"L2","institucion educativa, curriculo y gestion":"L2",
+      "institución educativa currículo y gestión":"L2","institucion educativa curriculo y gestion":"L2",
+      "institución educativa, curriculo y gestion":"L2","inst. educativa":"L2",
+      "institución educativa, currículo y gestión":"L2",
+      "L3":"L3","integración educativa de las tecnologías de la información y la comunicación":"L3",
+      "integracion educativa de las tecnologias de la informacion y la comunicacion":"L3",
+      "integración educativa de las tic":"L3","integracion educativa de las tic":"L3",
+      "integracion educativa de las tecnologias":"L3","tic":"L3",
+      "integración educativa de las tecnologías":"L3","integracion educativa":"L3",
+      "integración educativa de las tecnologías de la información y la comunicación":"L3"
+    };
+    const normLinea=e=>{const v=(e.linea||"").trim();return lineaMap[v]||lineaMap[v.toLowerCase()]||v;};
     const ponTotal=ST.ponencias||[];
     const artTotal=ST.articulos||[];
     il.innerHTML=`<div style="font-size:.72rem;font-weight:700;color:var(--txt2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em">Ponencias y artículos por línea</div>`+
     lineas.map(l=>{
-      const ests=ST.estudiantes.filter(e=>e.linea===l);
+      const ests=ST.estudiantes.filter(e=>normLinea(e)===l);
       const n=ests.length;
       const estIds=ests.map(e=>e.id);
       const ponVer=ponTotal.filter(p=>p.estado==="verificado"&&estIds.map(String).includes(String(p.estudianteId)));
@@ -2020,18 +2056,19 @@ function renderIndicadores(){
       </div>`;}).join("")+
     `<div style="margin-top:12px">
       <div style="font-size:.72rem;font-weight:700;color:var(--txt2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Artículos por estado editorial</div>
-      ${["publicado","aceptado","en_revision","sometido","en_preparacion","rechazado"].map(s=>{
-        const labs={publicado:"Publicado",aceptado:"Aceptado",en_revision:"En revisión",sometido:"Sometido",en_preparacion:"En preparación",rechazado:"Rechazado"};
-        const cols={publicado:"var(--verde)",aceptado:"var(--azulm)",en_revision:"#D97706",sometido:"var(--azulc)",en_preparacion:"#94A3B8",rechazado:"var(--rojo)"};
-        const nA=ST.articulos.filter(a=>a.estado===s).length;
-        if(!nA)return"";
-        return`<div style="margin-bottom:7px;display:flex;align-items:center;gap:8px">
-          <span style="font-size:.71rem;width:100px;color:var(--txt2)">${labs[s]}</span>
-          <div style="flex:1;height:8px;background:var(--borde);border-radius:10px;overflow:hidden">
-            <div style="height:100%;background:${cols[s]};width:${Math.round(nA/totalArts*100)}%;border-radius:10px"></div>
-          </div>
-          <span style="font-size:.71rem;font-weight:700;color:var(--txt2);min-width:18px">${nA}</span>
-        </div>`;}).join("")}
+      ${ST.articulos.length===0?`<div style="font-size:.74rem;color:var(--txt3);padding:8px 0">No hay artículos registrados aún.</div>`:[
+        ["publicado","aceptado","en_revision","sometido","en_preparacion","rechazado"].map(s=>{
+          const labs={publicado:"Publicado",aceptado:"Aceptado",en_revision:"En revisión",sometido:"Sometido",en_preparacion:"En preparación",rechazado:"Rechazado"};
+          const cols={publicado:"var(--verde)",aceptado:"var(--azulm)",en_revision:"#D97706",sometido:"var(--azulc)",en_preparacion:"#94A3B8",rechazado:"var(--rojo)"};
+          const nA=ST.articulos.filter(a=>a.estado===s).length;
+          if(!nA)return"";
+          return`<div style="margin-bottom:7px;display:flex;align-items:center;gap:8px">
+            <span style="font-size:.71rem;width:100px;color:var(--txt2)">${labs[s]}</span>
+            <div style="flex:1;height:8px;background:var(--borde);border-radius:10px;overflow:hidden">
+              <div style="height:100%;background:${cols[s]};width:${Math.round(nA/totalArts*100)}%;border-radius:10px"></div>
+            </div>
+            <span style="font-size:.71rem;font-weight:700;color:var(--txt2);min-width:18px">${nA}</span>
+          </div>`;}).join("")].join("")}
       <div style="font-size:.72rem;font-weight:700;color:var(--txt2);margin-top:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Artículos por índice</div>
       ${[["ISI","ISI / Web of Science"],["Scopus","Scopus"],["Ambos","Ambos (ISI + Scopus)"]].map(([k,label])=>{
         const nI=ST.articulos.filter(a=>(a.indice||"").includes(k)).length;
@@ -2059,10 +2096,19 @@ function renderAlertas2(){
   const al=generarAlertas();
   const crit=al.filter(a=>a.nivel==="critico");
   const warn=al.filter(a=>a.nivel==="ambar");
-  const html=(arr,ico,icC)=>arr.length?arr.map(a=>`<div class="ai-wrap"><div class="ai-ic ${icC}">${ico}</div><div class="ai-t"><div class="ai-n">${a.nombre}</div><div class="ai-s">${a.msg}</div></div><button class="btn bs bsm">Atender</button></div>`).join(""):`<p style="color:var(--txt3);font-size:.78rem">Sin alertas.</p>`;
+  const html=(arr,ico,icC)=>arr.length?arr.map(a=>`<div class="ai-wrap"><div class="ai-ic ${icC}">${ico}</div><div class="ai-t"><div class="ai-n">${a.nombre}</div><div class="ai-s">${a.msg}</div></div><button class="btn bs bsm" onclick="atenderAlerta('${(a.nombre||"").replace(/'/g,"\\'")}')">Atender</button></div>`).join(""):`<p style="color:var(--txt3);font-size:.78rem">Sin alertas.</p>`;
   const c=document.getElementById("alCrit");if(c)c.innerHTML=html(crit,"🚨","ic-r");
   const w=document.getElementById("alWarn");if(w)w.innerHTML=html(warn,"⚠️","ic-a");
   const nb=document.getElementById("nbadge");if(nb){nb.textContent=crit.length||"";nb.style.display=crit.length?"inline":"none";}
+}
+
+function atenderAlerta(nombreParcial){
+  const navEst=document.getElementById("nav-estudiantes");
+  irA("estudiantes",navEst);
+  setTimeout(()=>{
+    const input=document.querySelector("#v-estudiantes input[type=text]");
+    if(input){input.value=nombreParcial;filtrarEst(nombreParcial);}
+  },200);
 }
 
 // ── USUARIOS ──
@@ -2140,6 +2186,16 @@ function guardarUser(){
     toast("Usuario '"+u+"' creado exitosamente","ok");
   }
   saveSt(ST);cerrarModal("userForm");renderUsers();limpiarUserForm();
+  // Sync usuarios al GAS
+  (function(){
+    var _url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
+    if(!_url)return;
+    var _list=ST.usuarios.map(function(u){return{nombre:u.nombre,usuario:u.usuario,rol:u.rol,linea:u.linea||'',correo:u.correo||'-',activo:u.activo!==false};});
+    var _s=document.createElement('script');
+    _s.src=_url+'?callback=_sc&action=sync_usuarios&payload='+encodeURIComponent(JSON.stringify({action:'sync_usuarios',usuarios:_list}))+'&ts='+Date.now();
+    document.head.appendChild(_s);
+    setTimeout(function(){try{document.head.removeChild(_s);}catch(e){}},5000);
+  })();
 }
 
 function limpiarUserForm(){
@@ -2178,7 +2234,23 @@ function editarUser(i){
     window._editandoUser=false;
   },50);
 }
-function eliminarUser(i){if(!confirm("¿Eliminar usuario?"))return;ST.usuarios.splice(i,1);saveSt(ST);renderUsers();toast("Eliminado","ok");}
+function eliminarUser(i){
+  if(!confirm("¿Eliminar usuario?"))return;
+  ST.usuarios.splice(i,1);
+  saveSt(ST);
+  renderUsers();
+  toast("Eliminado","ok");
+  // Sync usuarios al GAS
+  (function(){
+    var _url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
+    if(!_url)return;
+    var _list=ST.usuarios.map(function(u){return{nombre:u.nombre,usuario:u.usuario,rol:u.rol,linea:u.linea||'',correo:u.correo||'-',activo:u.activo!==false};});
+    var _s=document.createElement('script');
+    _s.src=_url+'?callback=_sc&action=sync_usuarios&payload='+encodeURIComponent(JSON.stringify({action:'sync_usuarios',usuarios:_list}))+'&ts='+Date.now();
+    document.head.appendChild(_s);
+    setTimeout(function(){try{document.head.removeChild(_s);}catch(e){}},5000);
+  })();
+}
 
 // ── CONFIGURACIÓN ──
 function renderConfig(){
@@ -2204,17 +2276,28 @@ function guardarConfig(){
 async function syncToSheets(action,data){
   var url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
   if(!url) return;
-  // JSONP: funciona desde file:// y GitHub Pages sin CORS
-  var payload=JSON.stringify({action:action,data:data,sheetId:SHEETS_ID,ts:Date.now()});
-  var encoded=encodeURIComponent(payload);
-  var s=document.createElement('script');
-  s.src=url+'?callback=_sc&payload='+encoded.substring(0,1800);
-  s.onerror=function(){
-    // Fallback: fetch no-cors
-    try{fetch(url,{method:'POST',mode:'no-cors',body:payload}).catch(function(){});}catch(e){}
-  };
-  document.head.appendChild(s);
-  setTimeout(function(){try{document.head.removeChild(s);}catch(e){}},5000);
+  // JSONP - único método funcional desde GitHub Pages hacia GAS
+  if((action==='add'||action==='update')&&data&&data.id){
+    var s=document.createElement('script');
+    s.src=url+'?callback=_sc&action='+encodeURIComponent(action)
+      +'&nombre='+encodeURIComponent(data.nombre||'')
+      +'&id='+encodeURIComponent(data.id||'')
+      +'&cohorte='+encodeURIComponent(data.cohorte||'')
+      +'&correo='+encodeURIComponent(data.correo||'')
+      +'&linea='+encodeURIComponent(data.linea||'')
+      +'&director='+encodeURIComponent(data.director||'')
+      +'&tesis='+encodeURIComponent((data.tesis||'').substring(0,150))
+      +'&estado='+encodeURIComponent(data.estado||'pendiente')
+      +'&ts='+Date.now();
+    document.head.appendChild(s);
+    setTimeout(function(){try{document.head.removeChild(s);}catch(e){}},5000);
+  }
+  if(action==='delete'&&data&&data.id){
+    var sd=document.createElement('script');
+    sd.src=url+'?callback=_sc&action=delete&id='+encodeURIComponent(data.id||'')+'&ts='+Date.now();
+    document.head.appendChild(sd);
+    setTimeout(function(){try{document.head.removeChild(sd);}catch(e){}},5000);
+  }
 }
 window._sc=function(){};
 
@@ -2278,7 +2361,9 @@ async function reintentarSync(){
   console.log("✅ Pendientes sincronizados");
 }
 
+var _bloqueoCarga=false;
 async function cargarDesdeSheets(){
+  if(_bloqueoCarga)return;
   try{
     const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
     if(!url){console.warn("Sheets load: no GAS URL");return;}
@@ -2308,13 +2393,14 @@ async function cargarDesdeSheets(){
       renderAll();
       dashFilt=ST.estudiantes.slice();
       renderDash();
+      actualizarBadgesMenu();
       console.log("✅ "+cargados.length+" estudiantes cargados desde Sheets");
     }
   }catch(e){
     console.warn("Sheets load:",e.message);
   }
 }
-setInterval(function(){cargarDesdeSheets(true);},30000);
+window._reloadInterval=setInterval(function(){cargarDesdeSheets(true);},90000);
 
 // ── GOOGLE SHEETS ──
 async function conectarSheets(){
@@ -2470,21 +2556,32 @@ function parsRows(headers,rows){
   document.getElementById("prevWrap").style.display="block";
 }
 function confirmImport(){
-  const ex=new Set(ST.estudiantes.map(e=>e.id));
-  const new_=pendImport.filter(e=>!ex.has(e.id));
-  const dup=pendImport.length-new_.length;
+  const ex=new Set(ST.estudiantes.map(e=>String(e.id)));
+  const new_=pendImport.filter(e=>!ex.has(String(e.id)));
   ST.estudiantes.unshift(...new_);
   saveSt(ST);
-  cancelImport();filtrarEst();renderDash();
-  toast(`${new_.length} importados · Sincronizando con Sheets...`, "ok");
-  // Sync with delay to ensure localStorage is saved
-  setTimeout(function(){
-    syncCompleto();
-    syncToSheets("bulk", ST.estudiantes);
-    setTimeout(function(){
-      toast(`✅ ${new_.length} estudiantes sincronizados con Google Sheets`, "ok");
-    }, 2500);
-  }, 500);
+  cancelImport();filtrarEst();renderDash();actualizarBadgesMenu();
+  if(new_.length===0){toast("Sin estudiantes nuevos","ok");return;}
+  _bloqueoCarga=true;
+  toast(`${new_.length} importados · Enviando a Sheets...`,"ok");
+  var _impIdx=0;
+  function _enviarSiguiente(){
+    if(_impIdx<new_.length){
+      syncToSheets("add",new_[_impIdx]);
+      _impIdx++;
+      setTimeout(_enviarSiguiente,600);
+    }else{
+      var _espera=(new_.length*600)+8000;
+      setTimeout(function(){
+        _bloqueoCarga=false;
+        if(window._reloadInterval){clearInterval(window._reloadInterval);}
+        window._reloadInterval=setInterval(function(){cargarDesdeSheets(true);},90000);
+        renderIndicadores();
+        toast(`✅ ${new_.length} estudiante(s) enviados a Google Sheets`,"ok");
+      },_espera);
+    }
+  }
+  _enviarSiguiente();
 }
 function cancelImport(){pendImport=[];document.getElementById("prevWrap").style.display="none";}
 function descPlantilla(){
