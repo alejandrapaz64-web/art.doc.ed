@@ -1114,6 +1114,7 @@ function irA(v,btn){
   document.getElementById("ihTitle").textContent=cfgV.ih||v;
   document.getElementById("tbActions").innerHTML=cfgV.action||"";
   renderVista(v);
+  actualizarBadgesMenu();
 }
 
 // ══════════════════════════════════════
@@ -1290,29 +1291,29 @@ function actualizarBadgesMenu(){
     const bPon=document.getElementById("nbadge-pon");
     if(bPon){bPon.textContent=ponPend;bPon.style.display=ponPend?"inline":"none";bPon.className="nb";}
 
-    // ARTÍCULOS: pendientes de validación
-    const artPend=(ST.articulos||[]).filter(a=>!a.aprobado||a.aprobado==="pendiente").length;
+    // ARTÍCULOS: pendientes de validación (registrados sin decisión)
+    const artPend=(ST.articulos||[]).filter(a=>!a.aprobado||a.aprobado===""||a.aprobado==="pendiente").length;
     const bArt=document.getElementById("nbadge-art");
     if(bArt){bArt.textContent=artPend;bArt.style.display=artPend?"inline":"none";bArt.className="nb";}
 
-    // ESTUDIANTES: sin ponencia subida
-    const estSinPon=(ST.estudiantes||[]).filter(e=>!(ST.ponencias||[]).some(p=>p.estudianteId===e.id)).length;
+    // ESTUDIANTES: sin ponencia subida (con String() para consistencia)
+    const estSinPon=(ST.estudiantes||[]).filter(e=>!(ST.ponencias||[]).some(p=>String(p.estudianteId)===String(e.id))).length;
     const bEst=document.getElementById("nbadge-est");
     if(bEst){bEst.textContent=estSinPon;bEst.style.display=estSinPon?"inline":"none";bEst.className="nb";}
   }
 
   if(esEst&&estSesion){
-    // PONENCIAS del estudiante: verde=verificada, rojo=rechazada, ambar=pendiente
-    const ponEst=(ST.ponencias||[]).find(p=>p.estudianteId===estSesion.id);
+    // PONENCIAS del estudiante
+    const ponEst=(ST.ponencias||[]).find(p=>String(p.estudianteId)===String(estSesion.id));
     const bPonEst=document.getElementById("nbadge-pon");
     if(bPonEst){
       if(ponEst&&ponEst.estado==="verificado"){bPonEst.textContent="✓";bPonEst.style.display="inline";bPonEst.className="nb-verde";}
       else if(ponEst&&ponEst.estado==="rechazado"){bPonEst.textContent="!";bPonEst.style.display="inline";bPonEst.className="nb";}
-      else if(ponEst&&ponEst.estado==="pendiente"){bPonEst.textContent="…";bPonEst.style.display="inline";bPonEst.className="nb-ambar";}
+      else if(ponEst&&(ponEst.estado==="pendiente"||ponEst.estado==="Pendiente verificacion")){bPonEst.textContent="…";bPonEst.style.display="inline";bPonEst.className="nb-ambar";}
       else{bPonEst.style.display="none";}
     }
-    // ARTÍCULOS del estudiante: verde=aprobado, rojo=rechazado
-    const artsEst=(ST.articulos||[]).filter(a=>a.autorId===estSesion.id||a.autorCodigo===estSesion.id);
+    // ARTÍCULOS del estudiante
+    const artsEst=(ST.articulos||[]).filter(a=>String(a.autorId)===String(estSesion.id)||String(a.autorCodigo)===String(estSesion.id));
     const artAprobado=artsEst.some(a=>a.aprobado==="aprobado");
     const artRechazado=artsEst.some(a=>a.aprobado==="rechazado");
     const bArtEst=document.getElementById("nbadge-misart");
@@ -1355,7 +1356,7 @@ function renderDashPonencias(){
   const lnames={"L1":"Pedagogía e Infancia","L2":"Institución Educativa","L3":"TIC"};
   const lineaStats=lineas.map(l=>{
     const ests=(ST.estudiantes||[]).filter(e=>e.linea===l);
-    const conPon=ests.filter(e=>(ST.ponencias||[]).some(p=>String(p.estudianteId)===String(e.id))).length;
+    const conPon=ests.filter(e=>(ST.ponencias||[]).some(p=>String(p.estudianteId)===String(e.id)&&(p.estado==="verificado"||p.estado==="pendiente"||p.estado==="Pendiente verificacion"||p.estado==="Pendiente verificación"))).length;
     return{nombre:lnames[l]||l,total:ests.length,conPon,sinPon:ests.length-conPon};
   }).filter(s=>s.total>0);
   wrap.innerHTML=`
@@ -1885,19 +1886,46 @@ function renderMiAvance(){
     if(cnt)cnt.innerHTML='<p style="color:var(--txt3)">No se encontró su registro. Contacte a la coordinación.</p>';
     return;
   }
-  // Contar artículos aprobados del estudiante
-  const artsEst=ST.articulos.filter(function(a){return(a.autorId===e.id||a.autorNombre===e.nombre)&&a.aprobado==="aprobado";});
+  const artsEst=ST.articulos.filter(function(a){return(String(a.autorId)===String(e.id)||String(a.autorCodigo)===String(e.id)||a.autorNombre===e.nombre)&&a.aprobado==="aprobado";});
   const valid=artsEst.length||e.arts||0;
   const req=ST.config.arts||2;
   const falt=Math.max(0,req-valid);
-  document.getElementById("maArts").textContent=ST.articulos.length;
+  document.getElementById("maArts").textContent=ST.articulos.filter(a=>String(a.autorId)===String(e.id)||String(a.autorCodigo)===String(e.id)||a.autorNombre===e.nombre).length;
   document.getElementById("maValid").textContent=valid;
   document.getElementById("maFalt").textContent=falt;
   const cnt=document.getElementById("miAvanceContent");
   const pct=Math.min(100,Math.round(valid/req*100));
+  // Estado ponencia
+  const pon=(ST.ponencias||[]).find(p=>String(p.estudianteId)===String(e.id));
+  const ponHtml=`
+    <div style="margin-top:18px;border-top:1px solid var(--borde);padding-top:14px">
+      <div style="font-size:.8rem;font-weight:700;color:var(--txt);margin-bottom:10px">🎤 Obligación académica · Ponencia</div>
+      ${pon
+        ? pon.estado==="verificado"
+          ? `<div style="background:var(--verdeb);border-radius:10px;padding:14px 16px">
+               <div style="font-weight:700;font-size:.85rem;color:var(--verde)">✅ Ponencia verificada · Obligación cumplida</div>
+               <div style="font-size:.73rem;color:var(--txt2);margin-top:4px">Evento: <strong>${pon.evento||"—"}</strong> · Fecha: ${pon.fecha||"—"}</div>
+               <div style="font-size:.72rem;color:var(--txt2);margin-top:2px">Título: ${pon.titulo||"—"}</div>
+             </div>`
+          : pon.estado==="rechazado"
+          ? `<div style="background:var(--rojob);border-radius:10px;padding:14px 16px">
+               <div style="font-weight:700;font-size:.85rem;color:var(--rojo)">❌ Ponencia rechazada · Debe volver a enviar los soportes</div>
+               ${pon.obs_director?`<div style="font-size:.72rem;color:var(--rojo);margin-top:4px">Observación: ${pon.obs_director}</div>`:""}
+             </div>`
+          : `<div style="background:var(--ambarb);border-radius:10px;padding:14px 16px">
+               <div style="font-weight:700;font-size:.85rem;color:var(--ambar)">⏳ Soportes enviados · En revisión por la Coordinación</div>
+               <div style="font-size:.73rem;color:var(--txt2);margin-top:4px">Evento: <strong>${pon.evento||"—"}</strong> · Fecha envío: ${pon.fechaEnvio||"—"}</div>
+             </div>`
+        : `<div style="background:var(--rojob);border-radius:10px;padding:14px 16px">
+             <div style="font-weight:700;font-size:.85rem;color:var(--rojo)">⚠️ No ha subido los soportes de su ponencia</div>
+             <div style="font-size:.73rem;color:var(--txt2);margin-top:4px">Vaya al módulo <strong>Ponencias</strong> para subir el certificado y el aval institucional.</div>
+           </div>`
+      }
+    </div>`;
   cnt.innerHTML=`
     <div style="margin-bottom:16px;">
-      <div style="font-size:.8rem;font-weight:600;color:var(--txt);margin-bottom:8px;">Progreso hacia el requisito de graduación</div>
+      <div style="font-size:.8rem;font-weight:700;color:var(--txt);margin-bottom:6px">📄 Obligación académica · Artículos científicos</div>
+      <div style="font-size:.74rem;color:var(--txt2);margin-bottom:8px">Requisito: ${req} artículos en revistas ISI/Scopus Q1–Q2</div>
       <div class="pb" style="height:12px"><div class="pf pfv" style="width:${pct}%"></div></div>
       <div class="pt"><span>${valid}/${req} artículos válidos</span><span>${pct}%</span></div>
     </div>
@@ -1909,7 +1937,8 @@ function renderMiAvance(){
         ${pct>=100?"Ha cumplido el requisito de "+req+" artículos en revistas ISI/Scopus Q1–Q2.":
           "Necesita "+falt+" artículo(s) más aceptados o publicados en revistas ISI/Scopus Q1–Q2."}
       </div>
-    </div>`;
+    </div>
+    ${ponHtml}`;
 }
 
 // ── REPOSITORIO ──
