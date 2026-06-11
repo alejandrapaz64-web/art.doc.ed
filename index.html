@@ -478,7 +478,7 @@ code{background:#F1F5F9;border:1px solid var(--borde);border-radius:5px;padding:
             </div>
           </div>
           <div class="tw"><table>
-            <thead><tr><th><input type="checkbox" id="chkAll" onchange="selTodos(this.checked)"/></th><th>Nombre</th><th>Código</th><th>Cohorte</th><th>Línea</th><th>Director</th><th>Título de tesis</th><th>Arts.</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <thead><tr><th><input type="checkbox" id="chkAll" onchange="selTodos(this.checked)"/></th><th>Nombre</th><th>Código</th><th>Cohorte</th><th>Línea</th><th>Director</th><th>Título de tesis</th><th>Arts.</th><th>Estado ponencia</th><th>Acciones</th></tr></thead>
             <tbody id="estTbody"></tbody>
           </table></div>
           <div class="pgw">
@@ -1237,10 +1237,13 @@ function renderDash(){
   const cum=ST.estudiantes.filter(e=>e.estado==="cumplido").length;
   const crit=ST.estudiantes.filter(e=>e.estado==="critico").length;
   const arts=ST.articulos.length;
+  const ponVer=(ST.ponencias||[]).filter(p=>p.estado==="verificado").length;
+  const ponPend=(ST.ponencias||[]).filter(p=>p.estado==="pendiente"||p.estado==="Pendiente verificacion"||p.estado==="Pendiente verificación").length;
   document.getElementById("dash-kpis").innerHTML=`
     <div class="kpi"><div class="kv">${total}</div><div class="kl">Estudiantes activos</div></div>
     <div class="kpi" style="border-left-color:var(--azulm)"><div class="kv">${arts}</div><div class="kl">Artículos registrados</div></div>
-    <div class="kpi" style="border-left-color:var(--verde)"><div class="kv">${total?Math.round(cum/total*100):0}%</div><div class="kl">Requisito cumplido</div></div>
+    <div class="kpi" style="border-left-color:var(--verde)"><div class="kv">${ponVer}</div><div class="kl">Ponencias verificadas</div></div>
+    <div class="kpi" style="border-left-color:#D97706"><div class="kv">${ponPend}</div><div class="kl">Ponencias por verificar</div></div>
     <div class="kpi" style="border-left-color:var(--rojo)"><div class="kv">${crit}</div><div class="kl">En riesgo crítico</div></div>`;
   dashFilt=ST.estudiantes.slice();
   renderDashTabla();
@@ -1257,7 +1260,7 @@ function renderDashTabla(){
     <td><span class="b bgr">${e.cohorte||"—"}</span></td>
     <td><span class="b baz">${L[e.linea]||e.linea||"—"}</span></td>
     <td style="min-width:130px">${pbar(e.arts||0,pcls(e.estado))}</td>
-    <td>${sem(e.estado)}</td>
+    <td>${(()=>{const pon=(ST.ponencias||[]).find(p=>p.estudianteId===e.id);if(!pon)return'<span class="b bgr" style="color:var(--txt3);font-size:.68rem">Sin subir</span>';if(pon.estado==='verificado')return'<span class="b bve" style="font-size:.68rem">✅ Verificada</span>';if(pon.estado==='rechazado')return'<span class="b bro" style="font-size:.68rem">❌ Rechazada</span>';return'<span class="b bam" style="font-size:.68rem">⏳ Pendiente</span>';})()}</td>
   </tr>`).join("");
   document.getElementById("dashPgI").textContent=`Mostrando ${ini+1}–${fin} de ${dashFilt.length}`;
   const npg=Math.ceil(dashFilt.length/DPPG);
@@ -1469,7 +1472,13 @@ function renderEstTabla(){
       <td style="font-size:.74rem">${e.director||"—"}</td>
       <td style="font-size:.72rem;color:var(--txt2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.tesis||""}">${e.tesis?e.tesis.substring(0,55)+(e.tesis.length>55?"…":""):"—"}</td>
       <td style="text-align:center;font-weight:700;color:var(--azul)">${e.arts||0}</td>
-      <td>${sem(e.estado)}</td>
+      <td>${(()=>{
+        const pon=(ST.ponencias||[]).find(p=>p.estudianteId===e.id);
+        if(!pon) return`<span class="b bgr" style="color:var(--txt3)">Sin subir</span>`;
+        if(pon.estado==='verificado') return`<span class="b bve">✅ Verificada</span>`;
+        if(pon.estado==='rechazado') return`<span class="b bro">❌ Rechazada</span>`;
+        return`<span class="b bam">⏳ Pendiente</span>`;
+      })()}</td>
       <td><div style="display:flex;gap:4px;flex-wrap:nowrap;">
         <button class="btn bs bsm" onclick="exportPDFFicha(${ri})" title="Ficha PDF">📋</button>
         <button class="btn bs bsm" onclick="editarEst(${ri})" title="Editar">✏️</button>
@@ -1885,12 +1894,13 @@ function renderRepo(){filtrarRepo("");}
 // ── INDICADORES ──
 function renderIndicadores(){
   const total=ST.estudiantes.length||1;
-  const totalArts=ST.articulos.length;
-  const media=(totalArts/total).toFixed(1);
+  const totalArts=ST.articulos.length||1;
+  const media=(ST.articulos.length/total).toFixed(1);
   const pub=ST.articulos.filter(a=>a.estado==="publicado"||a.estado==="aceptado").length;
-  const tasa=totalArts?Math.round(pub/totalArts*100)+"%":"—";
+  const tasa=ST.articulos.length?Math.round(pub/ST.articulos.length*100)+"%":"—";
   const el=document.getElementById("indMedia");if(el)el.textContent=media;
   const el2=document.getElementById("indTasa");if(el2)el2.textContent=tasa;
+  // Cumplimiento por cohorte
   const cohs=[...new Set(ST.estudiantes.map(e=>e.cohorte))].sort();
   const ic=document.getElementById("indCohorte");
   if(ic)ic.innerHTML=cohs.length?cohs.map(c=>{
@@ -1899,25 +1909,66 @@ function renderIndicadores(){
     const pct=ests.length?Math.round(cum/ests.length*100):0;
     return`<div style="margin-bottom:11px;"><div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="font-size:.75rem;font-weight:600">Cohorte ${c}</span><span style="font-size:.7rem;color:var(--txt3)">${cum}/${ests.length} · ${pct}%</span></div>
     <div class="pb"><div class="pf ${pct>=50?"pfv":pct>0?"pfa":"pfr"}" style="width:${pct}%"></div></div></div>`;}).join(""):`<p style="color:var(--txt3);font-size:.78rem">Sin datos.</p>`;
+  // Produccion por linea
   const il=document.getElementById("indLinea");
-  if(il){const lineas=["L1","L2","L3"];const lnames={L1:"Pedagogía e Infancia",L2:"Institución Educativa",L3:"TIC"};
-    il.innerHTML=lineas.map(l=>{
+  if(il){
+    const lineas=["L1","L2","L3"];
+    const lnames={L1:"Pedagogía e Infancia",L2:"Institución Educativa",L3:"TIC"};
+    const ponTotal=ST.ponencias||[];
+    const artTotal=ST.articulos||[];
+    il.innerHTML=`<div style="font-size:.72rem;font-weight:700;color:var(--txt2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em">Ponencias y artículos por línea</div>`+
+    lineas.map(l=>{
       const ests=ST.estudiantes.filter(e=>e.linea===l);
       const n=ests.length;
       const estIds=ests.map(e=>e.id);
-      const ponVer=(ST.ponencias||[]).filter(p=>(p.estado==='verificado')&&estIds.includes(p.estudianteId)).length;
-      const ponPend=(ST.ponencias||[]).filter(p=>(p.estado==='pendiente'||p.estado==='Pendiente verificacion'||p.estado==='Pendiente verificación')&&estIds.includes(p.estudianteId)).length;
-      const ponRech=(ST.ponencias||[]).filter(p=>p.estado==='rechazado'&&estIds.includes(p.estudianteId)).length;
-      return`<div style="margin-bottom:14px;">
-        <div style="font-size:.74rem;font-weight:600;margin-bottom:5px;color:var(--azul)">${lnames[l]}</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <span class="b baz">${n} estudiante${n!==1?'s':''}</span>
-          <span class="b bve" title="Ponencias verificadas">🎤 ${ponVer} verificada${ponVer!==1?'s':''}</span>
-          ${ponPend>0?`<span class="b bam" title="Ponencias pendientes">⏳ ${ponPend} pendiente${ponPend!==1?'s':''}</span>`:''}
-          ${ponRech>0?`<span class="b bro" title="Ponencias rechazadas">❌ ${ponRech} rechazada${ponRech!==1?'s':''}</span>`:''}
+      const ponVer=ponTotal.filter(p=>p.estado==="verificado"&&estIds.includes(p.estudianteId));
+      const ponPend=ponTotal.filter(p=>(p.estado==="pendiente"||p.estado==="Pendiente verificacion"||p.estado==="Pendiente verificación")&&estIds.includes(p.estudianteId));
+      const ponRech=ponTotal.filter(p=>p.estado==="rechazado"&&estIds.includes(p.estudianteId));
+      const artsL=artTotal.filter(a=>estIds.includes(a.autorId)||estIds.includes(a.autorCodigo));
+      const artsQ1=artsL.filter(a=>a.cuartil==="Q1").length;
+      const artsQ2=artsL.filter(a=>a.cuartil==="Q2").length;
+      const artsPub=artsL.filter(a=>a.estado==="publicado"||a.estado==="aceptado").length;
+      const nomVer=ponVer.map(p=>p.estudianteNombre||p.estudiante||"").filter(Boolean);
+      return`<div style="margin-bottom:16px;border-bottom:1px solid var(--borde);padding-bottom:12px">
+        <div style="font-size:.74rem;font-weight:700;margin-bottom:6px;color:var(--azul)">${lnames[l]}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+          <span class="b baz">${n} estudiante${n!==1?"s":""}</span>
+          <span class="b bve">🎤 ${ponVer.length} verificada${ponVer.length!==1?"s":""}</span>
+          ${ponPend.length?`<span class="b bam">⏳ ${ponPend.length} pendiente${ponPend.length!==1?"s":""}</span>`:""}
+          ${ponRech.length?`<span class="b bro">❌ ${ponRech.length} rechazada${ponRech.length!==1?"s":""}</span>`:""}
+          ${artsL.length?`<span class="b bte">📄 ${artsL.length} artículo${artsL.length!==1?"s":""}</span>`:""}
+          ${artsQ1?`<span class="b baz">Q1: ${artsQ1}</span>`:""}
+          ${artsQ2?`<span class="b baz">Q2: ${artsQ2}</span>`:""}
+          ${artsPub?`<span class="b bve">Pub: ${artsPub}</span>`:""}
         </div>
-      </div>`;}).join("");}
+        ${nomVer.length?`<div style="font-size:.68rem;color:var(--txt2);line-height:1.8;padding-left:4px">${nomVer.map(nm=>`✅ ${nm}`).join("<br>")}</div>`:""}
+      </div>`;}).join("")+
+    `<div style="margin-top:12px">
+      <div style="font-size:.72rem;font-weight:700;color:var(--txt2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Artículos por estado editorial</div>
+      ${["publicado","aceptado","en_revision","sometido","en_preparacion","rechazado"].map(s=>{
+        const labs={publicado:"Publicado",aceptado:"Aceptado",en_revision:"En revisión",sometido:"Sometido",en_preparacion:"En preparación",rechazado:"Rechazado"};
+        const cols={publicado:"var(--verde)",aceptado:"var(--azulm)",en_revision:"#D97706",sometido:"var(--azulc)",en_preparacion:"#94A3B8",rechazado:"var(--rojo)"};
+        const nA=ST.articulos.filter(a=>a.estado===s).length;
+        if(!nA)return"";
+        return`<div style="margin-bottom:7px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:.71rem;width:100px;color:var(--txt2)">${labs[s]}</span>
+          <div style="flex:1;height:8px;background:var(--borde);border-radius:10px;overflow:hidden">
+            <div style="height:100%;background:${cols[s]};width:${Math.round(nA/totalArts*100)}%;border-radius:10px"></div>
+          </div>
+          <span style="font-size:.71rem;font-weight:700;color:var(--txt2);min-width:18px">${nA}</span>
+        </div>`;}).join("")}
+      <div style="font-size:.72rem;font-weight:700;color:var(--txt2);margin-top:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Artículos por índice</div>
+      ${[["ISI","ISI / Web of Science"],["Scopus","Scopus"],["Ambos","Ambos (ISI + Scopus)"]].map(([k,label])=>{
+        const nI=ST.articulos.filter(a=>(a.indice||"").includes(k)).length;
+        if(!nI)return"";
+        return`<div style="margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          <span class="b bte" style="font-size:.67rem">${label}</span>
+          <span style="font-weight:700;font-size:.72rem;color:var(--azul)">${nI}</span>
+        </div>`;}).join("")}
+    </div>`;
+  }
 }
+
 
 // ── ALERTAS ──
 function generarAlertas(){
@@ -3116,6 +3167,15 @@ function abrirModal(id){
   }
   if(id==="articuloForm"){
     poblarAutoresSelector();
+    // Si es estudiante, predeterminar su propio nombre y bloquear el selector
+    const sel=document.getElementById("artAutor");
+    if(rolActual==="estudiante"&&estSesion&&sel){
+      sel.value=estSesion.id;
+      sel.disabled=true;
+      autoFillAutor(estSesion.id);
+    } else if(sel){
+      sel.disabled=false;
+    }
   }
   document.getElementById("modal-"+id).classList.add("on");
 }
@@ -3127,7 +3187,7 @@ function cerrarModal(id){
     document.getElementById("artFormTitle").textContent="Registrar artículo científico";
     ["artTitulo","artRevista","artFecha","artDoi","artKeywords","artResumen","artAutorNombre","artAutorCodigo"].forEach(x=>{const el=document.getElementById(x);if(el)el.value="";});
     document.getElementById("artEstado").value="en_preparacion";
-    const as=document.getElementById("artAutor");if(as)as.value="";
+    const as=document.getElementById("artAutor");if(as){as.value="";as.disabled=false;}
   }
 }
 function toast(msg,tipo){
