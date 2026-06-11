@@ -1323,6 +1323,8 @@ function actualizarBadgesMenu(){
     }
   }
 }
+
+function renderDashDist(){
   const estados=["publicado","aceptado","en_revision","sometido","en_preparacion","rechazado"];
   const labels={publicado:"Publicado",aceptado:"Aceptado",en_revision:"En revisión",sometido:"Sometido",en_preparacion:"En preparación",rechazado:"Rechazado"};
   const colors={publicado:"var(--verde)",aceptado:"var(--azulm)",en_revision:"#D97706",sometido:"var(--azulc)",en_preparacion:"#94A3B8",rechazado:"var(--rojo)"};
@@ -1339,7 +1341,6 @@ function actualizarBadgesMenu(){
 }
 
 function renderDashPonencias(){
-  const esCoord=["coordinadora","direccion"].includes(rolActual);
   const widget=document.getElementById("dash-ponencias-widget");
   const wrap=document.getElementById("dashPonenciasWrap");
   if(!widget||!wrap)return;
