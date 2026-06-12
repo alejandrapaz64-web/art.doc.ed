@@ -1048,7 +1048,6 @@ function doLogin(){
   renderAll();
   setLogos();
   cargarDesdeSheets();
-  setTimeout(function(){syncCompleto();},3000);
   setTimeout(()=>{
     reintentarSync();
     actualizarBannerSync(contarPendientes());
@@ -1056,7 +1055,6 @@ function doLogin(){
 }
 
 function doLogout(){
-  syncCompleto();
   document.getElementById("app").classList.remove("on");
   document.getElementById("loginPage").style.display="flex";
   document.getElementById("lEmail").value="";
@@ -1868,6 +1866,23 @@ function guardarArt(){
   toast("Artículo guardado","ok");
   document.getElementById("artFormTitle").textContent="Registrar artículo científico";
   document.getElementById("artIdx").value="";
+  // Popup informativo de revisión (solo al registrar artículo nuevo)
+  if(esNuevo){
+    try{
+      const mc=document.createElement("div");
+      mc.style.cssText="position:fixed;inset:0;background:rgba(0,32,96,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
+      mc.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;padding:32px 28px;text-align:center;box-shadow:0 8px 40px rgba(0,32,96,.18)">
+        <div style="font-size:2.2rem;margin-bottom:8px">📄</div>
+        <div style="font-weight:700;font-size:1.1rem;color:#002060;margin-bottom:10px">Artículo registrado exitosamente</div>
+        <p style="font-size:.85rem;color:#374263;line-height:1.6;margin-bottom:14px">Su artículo ha sido recibido y será revisado por la <strong>Coordinación Académica</strong>, la <strong>Dirección</strong> o el <strong>Director de línea</strong> correspondiente.<br><br>Una vez revisado, su estado de validación (✅ Aprobado, ❌ Rechazado o ⏳ Pendiente) se actualizará en este sistema.</p>
+        <div style="background:#F0F6FF;border-radius:8px;padding:10px 14px;font-size:.78rem;color:#185FA5;margin-bottom:18px;text-align:left">
+          <strong>Próximos pasos:</strong><br>Si hay observaciones, se le notificará para realizar los ajustes necesarios.
+        </div>
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="background:#002060;color:#fff;border:none;border-radius:8px;padding:10px 32px;font-weight:700;font-size:.9rem;cursor:pointer">Entendido</button>
+      </div>`;
+      document.body.appendChild(mc);
+    }catch(popErr){console.error("popup error:",popErr);}
+  }
 }
 
 // ── MIS ARTÍCULOS (estudiante) ──
@@ -2087,9 +2102,10 @@ function renderIndicadores(){
 function generarAlertas(){
   const al=[];
   ST.estudiantes.forEach(e=>{
-    if((e.arts||0)===0) al.push({tipo:"critico",nombre:e.nombre.split(",")[0],msg:"Sin artículos registrados",nivel:"critico"});
+    const artsAprob=(ST.articulos||[]).filter(a=>(String(a.autorCodigo)===String(e.id)||String(a.autorId)===String(e.id))&&a.aprobado==="aprobado").length;
+    if(artsAprob===0) al.push({tipo:"critico",nombre:e.nombre.split(",")[0],msg:"Sin artículos registrados",nivel:"critico"});
     else if(e.estado==="critico") al.push({tipo:"critico",nombre:e.nombre.split(",")[0],msg:"Riesgo de no graduación · Año 3+ sin aceptación",nivel:"critico"});
-    else if(e.estado==="progreso"&&(e.arts||0)<2) al.push({tipo:"ambar",nombre:e.nombre.split(",")[0],msg:"En progreso · Faltan "+(2-(e.arts||0))+" artículo(s)",nivel:"ambar"});
+    else if(e.estado==="progreso"&&artsAprob<2) al.push({tipo:"ambar",nombre:e.nombre.split(",")[0],msg:"En progreso · Faltan "+(2-artsAprob)+" artículo(s)",nivel:"ambar"});
   });
   return al;
 }
