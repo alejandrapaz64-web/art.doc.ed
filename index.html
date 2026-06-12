@@ -396,12 +396,7 @@ code{background:#F1F5F9;border:1px solid var(--borde);border-radius:5px;padding:
 
       <!-- ══ DASHBOARD ══ -->
       <div class="view on" id="v-dashboard">
-        <div style="display:flex;justify-content:flex-end;gap:7px;margin-bottom:10px;">
-          <button class="btn bs bsm" onclick="exportExcelEstudiantes()">📊 Excel estudiantes</button>
-          <button class="btn bs bsm" onclick="exportPDFEstudiantes()">📄 PDF estudiantes</button>
-          <button class="btn bs bsm" onclick="exportExcelArticulos()">📊 Excel artículos</button>
-          <button class="btn bs bsm" onclick="exportPDFArticulos()">📄 PDF artículos</button>
-        </div>
+        <div id="dashExportBar" style="display:flex;justify-content:flex-end;gap:7px;margin-bottom:10px;"></div>
         <div class="kg kg4" id="dash-kpis"></div>
         <div class="g3r">
           <div>
@@ -813,7 +808,6 @@ code{background:#F1F5F9;border:1px solid var(--borde);border-radius:5px;padding:
         </div>
         <div class="ff"><label>Cuartil</label><select id="artCuartil"><option value="Q1">Q1</option><option value="Q2">Q2</option><option value="Q3">Q3</option></select></div>
         <div class="ff"><label>Índice</label><select id="artIndice"><option value="ISI">ISI / Web of Science</option><option value="Scopus">Scopus</option><option value="ISI/Scopus">ISI + Scopus</option></select></div>
-        <div class="ff"><label>Seminario de línea</label><select id="artSeminario"><option value="1">Seminario I</option><option value="2">Seminario II</option><option value="3">Seminario III</option></select></div>
         <div class="ff"><label>Fecha de envío</label><input type="date" id="artFecha"/></div>
         <div class="ff"><label>DOI (si está publicado)</label><input type="text" id="artDoi" placeholder="10.xxxx/xxxxx"/></div>
         <div class="ff full"><label>Palabras clave</label><input type="text" id="artKeywords" placeholder="Separadas por coma"/></div>
@@ -1048,6 +1042,8 @@ function doLogin(){
   renderAll();
   setLogos();
   cargarDesdeSheets();
+  cargarArticulosDesdeSheets().then(()=>{renderArtsAdmin();renderMisArts();renderDash();});
+  cargarPonenciasDesdeSheets().then(()=>{try{renderPonencias();}catch(ex){}renderDash();renderDashPonencias();});
   setTimeout(()=>{
     reintentarSync();
     actualizarBannerSync(contarPendientes());
@@ -1215,6 +1211,8 @@ function renderDashEstudiante(){
   if(dashAl){
     const msgs = [];
     if(artsVal<2) msgs.push({tipo:'critico',msg:'Faltan '+(2-artsVal)+' artículo(s) válidos para cumplir el requisito'});
+    const artPend=artsE.filter(a=>!a.aprobado||a.aprobado==='pendiente');
+    if(artPend.length>0) msgs.push({tipo:'ambar',msg:artPend.length+' artículo(s) en verificación · La coordinación los revisará pronto'});
     if(!pond) msgs.push({tipo:'critico',msg:'No ha subido los soportes de su ponencia'});
     else if(pond.estado==='rechazado') msgs.push({tipo:'critico',msg:'Su ponencia fue rechazada · Vuelva a subir los soportes'});
     else if(pond.estado==='pendiente') msgs.push({tipo:'ambar',msg:'Ponencia en verificación · La coordinación la revisará pronto'});
@@ -1232,8 +1230,15 @@ function renderDashEstudiante(){
 function renderDash(){
   // Si es estudiante, mostrar ficha personal
   if(rolActual==="estudiante"){
+    const bar=document.getElementById("dashExportBar");if(bar)bar.style.display="none";
     renderDashEstudiante();return;
   }
+  const bar=document.getElementById("dashExportBar");
+  if(bar)bar.innerHTML=`
+    <button class="btn bs bsm" onclick="exportExcelEstudiantes()">📊 Excel estudiantes</button>
+    <button class="btn bs bsm" onclick="exportPDFEstudiantes()">📄 PDF estudiantes</button>
+    <button class="btn bs bsm" onclick="exportExcelArticulos()">📊 Excel artículos</button>
+    <button class="btn bs bsm" onclick="exportPDFArticulos()">📄 PDF artículos</button>`;
   dashFilt=ST.estudiantes.slice();
   const total=ST.estudiantes.length;
   const cum=ST.estudiantes.filter(e=>e.estado==="cumplido").length;
@@ -1577,7 +1582,7 @@ function eliminarEst(i){
   if(window._reloadInterval){clearInterval(window._reloadInterval);}
   setTimeout(function(){
     _bloqueoCarga=false;
-    window._reloadInterval=setInterval(function(){cargarDesdeSheets(true);},90000);
+    window._reloadInterval=setInterval(_syncCicloCompleto,90000);
   },20000);
 }
 function guardarEst(){
@@ -1693,7 +1698,6 @@ function editarArt(i){
   document.getElementById("artEstado").value=a.estado;
   document.getElementById("artCuartil").value=a.cuartil||"Q2";
   document.getElementById("artIndice").value=a.indice||"Scopus";
-  document.getElementById("artSeminario").value=a.seminario||"1";
   document.getElementById("artFecha").value=a.fecha||"";
   document.getElementById("artDoi").value=a.doi||"";
   document.getElementById("artKeywords").value=a.keywords||"";
@@ -1798,7 +1802,7 @@ function guardarArt(){
   const autorEst=ST.estudiantes.find(e=>e.id===autorId);
   const link=(document.getElementById("artLink")||{}).value||"";
   const obj={titulo,revista,estado,cuartil:document.getElementById("artCuartil").value,
-    indice:document.getElementById("artIndice").value,seminario:document.getElementById("artSeminario").value,
+    indice:document.getElementById("artIndice").value,
     fecha:document.getElementById("artFecha").value,doi:document.getElementById("artDoi").value,
     keywords:document.getElementById("artKeywords").value,resumen:document.getElementById("artResumen").value,
     link:link,
@@ -2194,7 +2198,8 @@ function guardarUser(){
   if(idx<0&&ST.usuarios.find(x=>x.usuario===u)){toast("Ese nombre de usuario ya existe","err");return;}
   const estBase=document.getElementById("uEstBase");
   const estId=estBase?estBase.value:"";
-  const obj={nombre:n,usuario:u,rol:r,password:p,linea:document.getElementById("uLinea").value,activo:true,estId:estId||""};
+  const estBaseEst=estId?ST.estudiantes.find(x=>x.id===estId):null;
+  const obj={nombre:n,usuario:u,rol:r,password:p,linea:document.getElementById("uLinea").value,activo:true,estId:estId||"",correo:(estBaseEst&&estBaseEst.correo)||(idx>=0&&ST.usuarios[idx]?ST.usuarios[idx].correo:"")||""};
   if(idx>=0){
     ST.usuarios[idx]=obj;
     toast("Usuario '"+u+"' actualizado correctamente","ok");
@@ -2379,6 +2384,96 @@ async function reintentarSync(){
 }
 
 var _bloqueoCarga=false;
+async function cargarArticulosDesdeSheets(){
+  try{
+    const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
+    if(!url)return;
+    const resp=await fetch(url+"?action=get_articulos&t="+Date.now());
+    if(!resp.ok){console.warn("Articulos load: Failed to fetch");return;}
+    const text=await resp.text();
+    const lines=text.split("\n").map(l=>l.trim()).filter(l=>l);
+    if(lines.length<2) return;
+    const headers=lines[0].replace(/\uFEFF/g,"").split(",").map(h=>h.replace(/"/g,"").trim().toLowerCase());
+    const rows=lines.slice(1).map(line=>{
+      const vals=[];let cur="",inQ=false;
+      for(const c of line){if(c==='"')inQ=!inQ;else if(c===","&&!inQ){vals.push(cur.trim());cur="";}else cur+=c;}
+      vals.push(cur.trim());return vals;
+    }).filter(r=>r.some(v=>v));
+    const idx={};headers.forEach((h,i)=>{idx[h]=i;});
+    if(idx.titulo===undefined) return;
+    const cargados=rows.map(r=>{
+      const v=(idx.validacion!==undefined?(r[idx.validacion]||"").toLowerCase():"");
+      let aprobado;
+      if(v==="aprobado")aprobado="aprobado";
+      else if(v==="rechazado")aprobado="rechazado";
+      else aprobado=undefined;
+      const estRaw=idx.estado_editorial!==undefined?(r[idx.estado_editorial]||""):"";
+      const estMap={"en preparacion":"en_preparacion","en preparación":"en_preparacion","sometido":"sometido","en revision":"en_revision","en revisión":"en_revision","aceptado":"aceptado","publicado":"publicado","rechazado":"rechazado"};
+      const codAut=idx.codigo_autor!==undefined?(r[idx.codigo_autor]||""):"";
+      return{
+        titulo:r[idx.titulo]||"",
+        autorNombre:idx.autor!==undefined?(r[idx.autor]||""):"",
+        autorCodigo:codAut,
+        autorId:codAut,
+        revista:idx.revista!==undefined?(r[idx.revista]||""):"",
+        cuartil:idx.cuartil!==undefined?(r[idx.cuartil]||"Q2"):"Q2",
+        indice:idx.indice!==undefined?(r[idx.indice]||"Scopus"):"Scopus",
+        estado:estMap[estRaw.toLowerCase()]||estRaw||"en_preparacion",
+        aprobado:aprobado,
+        observacion:idx.observacion!==undefined?(r[idx.observacion]||""):"",
+        obs_director:idx.observacion!==undefined?(r[idx.observacion]||""):"",
+        doi:idx.doi!==undefined?(r[idx.doi]||""):"",
+        link:idx.link!==undefined?(r[idx.link]||""):"",
+        fecha:idx.fecha_envio!==undefined?(r[idx.fecha_envio]||""):""
+      };
+    }).filter(a=>a.titulo);
+    ST.articulos=cargados;
+    saveSt(ST);
+    console.log("✅ "+cargados.length+" artículos cargados desde Sheets");
+  }catch(e){
+    console.warn("Articulos load:",e.message);
+  }
+}
+
+async function cargarPonenciasDesdeSheets(){
+  try{
+    const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
+    if(!url)return;
+    const resp=await fetch(url+"?action=get_ponencias&t="+Date.now());
+    if(!resp.ok){console.warn("Ponencias load: Failed to fetch");return;}
+    const text=await resp.text();
+    const lines=text.split("\n").map(l=>l.trim()).filter(l=>l);
+    if(lines.length<2) return;
+    const headers=lines[0].replace(/\uFEFF/g,"").split(",").map(h=>h.replace(/"/g,"").trim().toLowerCase());
+    const rows=lines.slice(1).map(line=>{
+      const vals=[];let cur="",inQ=false;
+      for(const c of line){if(c==='"')inQ=!inQ;else if(c===","&&!inQ){vals.push(cur.trim());cur="";}else cur+=c;}
+      vals.push(cur.trim());return vals;
+    }).filter(r=>r.some(v=>v));
+    const idx={};headers.forEach((h,i)=>{idx[h]=i;});
+    if(idx.estudiante===undefined) return;
+    const cargados=rows.map(r=>({
+      estudianteNombre:r[idx.estudiante]||"",
+      estudiante:r[idx.estudiante]||"",
+      estudianteId:idx.id_estudiante!==undefined?(r[idx.id_estudiante]||""):"",
+      estudianteCorreo:idx.correo!==undefined?(r[idx.correo]||""):"",
+      correo:idx.correo!==undefined?(r[idx.correo]||""):"",
+      evento:idx.evento!==undefined?(r[idx.evento]||""):"",
+      fecha:idx.fecha_ponencia!==undefined?(r[idx.fecha_ponencia]||""):"",
+      titulo:idx.titulo_ponencia!==undefined?(r[idx.titulo_ponencia]||""):"",
+      fechaEnvio:idx.fecha_envio!==undefined?(r[idx.fecha_envio]||""):"",
+      estado:idx.estado!==undefined?(r[idx.estado]||"pendiente"):"pendiente",
+      fechaVerificacion:idx.fecha_verificacion!==undefined?(r[idx.fecha_verificacion]||""):"",
+      observacion:idx.observacion!==undefined?(r[idx.observacion]||""):""
+    })).filter(p=>p.estudianteId);
+    ST.ponencias=cargados;
+    saveSt(ST);
+    console.log("✅ "+cargados.length+" ponencias cargadas desde Sheets");
+  }catch(e){
+    console.warn("Ponencias load:",e.message);
+  }
+}
+
 async function cargarDesdeSheets(){
   if(_bloqueoCarga)return;
   try{
@@ -2417,7 +2512,12 @@ async function cargarDesdeSheets(){
     console.warn("Sheets load:",e.message);
   }
 }
-window._reloadInterval=setInterval(function(){cargarDesdeSheets(true);},90000);
+function _syncCicloCompleto(){
+  cargarDesdeSheets(true);
+  cargarArticulosDesdeSheets().then(()=>{renderArtsAdmin();renderMisArts();renderDash();});
+  cargarPonenciasDesdeSheets().then(()=>{try{renderPonencias();}catch(ex){}renderDash();renderDashPonencias();});
+}
+window._reloadInterval=setInterval(_syncCicloCompleto,90000);
 
 // ── GOOGLE SHEETS ──
 async function conectarSheets(){
@@ -2592,7 +2692,7 @@ function confirmImport(){
       setTimeout(function(){
         _bloqueoCarga=false;
         if(window._reloadInterval){clearInterval(window._reloadInterval);}
-        window._reloadInterval=setInterval(function(){cargarDesdeSheets(true);},90000);
+        window._reloadInterval=setInterval(_syncCicloCompleto,90000);
         renderIndicadores();
         toast(`✅ ${new_.length} estudiante(s) enviados a Google Sheets`,"ok");
       },_espera);
@@ -2626,7 +2726,9 @@ function toggleCargaMasiva(){
 function exportCSV(){ exportExcelEstudiantes(); } // alias para compatibilidad
 
 function exportExcelEstudiantes(){
-  if(typeof XLSX==="undefined"){toast("Librería Excel no cargada. Verifique conexión.","err");return;}
+  try{
+  if(typeof XLSX==="undefined"){toast("Librería Excel no cargada. Verifique conexión a internet.","err");return;}
+  if(!estFilt||!estFilt.length){toast("No hay estudiantes para exportar","err");return;}
   const LNAMES={L1:"Pedagogía e Infancia",L2:"Institución Educativa, Currículo y Gestión",L3:"Integración Educativa de las TIC"};
   const wb=XLSX.utils.book_new();
   // Hoja 1: Estudiantes
@@ -2652,7 +2754,7 @@ function exportExcelEstudiantes(){
     ["Estudiante","Código","Título del artículo","Revista","Cuartil","Índice","Estado editorial","Validación director","DOI"]
   ];
   estFilt.forEach(e=>{
-    const artsE=ST.articulos.filter(a=>a.autorId===e.id||a.autorNombre===e.nombre||a.autorCodigo===e.id);
+    const artsE=(ST.articulos||[]).filter(a=>a.autorId===e.id||a.autorNombre===e.nombre||a.autorCodigo===e.id);
     artsE.forEach(a=>{
       dataArts.push([e.nombre,e.id,a.titulo,a.revista||"—",a.cuartil||"Q2",a.indice||"Scopus",AEN[a.estado]||a.estado,
         a.aprobado==="aprobado"?"Aprobado":a.aprobado==="rechazado"?"Rechazado":"Pendiente",a.doi||"—"]);
@@ -2666,6 +2768,10 @@ function exportExcelEstudiantes(){
 
   XLSX.writeFile(wb,"Sistema_Doctoral_Estudiantes_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("✅ Excel descargado correctamente","ok");
+  }catch(err){
+    console.error("exportExcelEstudiantes error:",err);
+    toast("Error al generar Excel: "+err.message,"err");
+  }
 }
 
 function exportExcelArticulos(){
