@@ -1347,6 +1347,7 @@ function renderDashDist(){
 }
 
 function renderDashPonencias(){
+  const esCoord=["coordinadora","direccion","director"].includes(rolActual);
   const widget=document.getElementById("dash-ponencias-widget");
   const wrap=document.getElementById("dashPonenciasWrap");
   if(!widget||!wrap)return;
