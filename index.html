@@ -272,6 +272,24 @@ code{background:#F1F5F9;border:1px solid var(--borde);border-radius:5px;padding:
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+window.addEventListener("load",function(){
+  if(typeof XLSX==="undefined"){
+    var s=document.createElement("script");
+    s.src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js";
+    document.head.appendChild(s);
+  }
+});
+function asegurarXLSX(cb){
+  if(typeof XLSX!=="undefined"){cb();return;}
+  toast("Cargando librería Excel, intente de nuevo en unos segundos…","ok");
+  var s=document.createElement("script");
+  s.src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js";
+  s.onload=function(){if(typeof XLSX!=="undefined")cb();else toast("No se pudo cargar la librería Excel. Verifique su conexión a internet.","err");};
+  s.onerror=function(){toast("No se pudo cargar la librería Excel. Verifique su conexión a internet.","err");};
+  document.head.appendChild(s);
+}
+</script>
 </head>
 <body>
 
@@ -406,6 +424,8 @@ code{background:#F1F5F9;border:1px solid var(--borde);border-radius:5px;padding:
                 
                 <div style="margin-left:auto;display:flex;gap:7px;">
                   <div class="sw"><span class="si">🔍</span><input type="text" placeholder="Buscar..." oninput="filtrarDashEst(this.value)"/></div>
+                  <button class="btn bs bsm" onclick="exportExcelEstadoRequisito()">📊 Excel</button>
+                  <button class="btn bs bsm" onclick="exportPDFEstadoRequisito()">📄 PDF</button>
                 </div>
               </div>
               <div class="tw"><table>
@@ -467,9 +487,9 @@ code{background:#F1F5F9;border:1px solid var(--borde);border-radius:5px;padding:
               <select class="sel" id="fEstCohorte" onchange="filtrarEst()"><option value="">Todas las cohortes</option></select>
               <select class="sel" id="fEstLinea" onchange="filtrarEst()">
                 <option value="">Todas las líneas</option>
-                <option value="L1">L1 · Pedagogía</option>
-                <option value="L2">L2 · Inst. Educativa</option>
-                <option value="L3">L3 · TIC</option>
+                <option value="Pedagogía e Infancia">Pedagogía e Infancia</option>
+                <option value="Institución Educativa, Currículo y Gestión">Institución Educativa, Currículo y Gestión</option>
+                <option value="Integración Educativa de las TIC">Integración Educativa de las TIC</option>
               </select>
               <button class="btn bp bsm" onclick="abrirModal('estForm')">+ Nuevo</button>
               <button class="btn bs bsm" onclick="toggleCargaMasiva()">📊 Carga masiva</button>
@@ -774,7 +794,7 @@ code{background:#F1F5F9;border:1px solid var(--borde);border-radius:5px;padding:
           <select id="eCohorte"><option value="">Seleccione...</option><option>2022-1</option><option>2023-1</option><option>2024-1</option><option>2025-1</option><option>2026-1</option></select>
         </div>
         <div class="ff"><label>Línea de investigación</label>
-          <select id="eLinea"><option value="">Seleccione...</option><option value="L1">L1 · Pedagogía e Infancia</option><option value="L2">L2 · Institución Educativa, Currículo y Gestión</option><option value="L3">L3 · Integración Educativa de las TIC</option></select>
+          <select id="eLinea"><option value="">Seleccione...</option><option value="Pedagogía e Infancia">Pedagogía e Infancia</option><option value="Institución Educativa, Currículo y Gestión">Institución Educativa, Currículo y Gestión</option><option value="Integración Educativa de las TIC">Integración Educativa de las TIC</option></select>
         </div>
         <div class="ff"><label>Director de tesis</label><input type="text" id="eDirector" placeholder="Nombre del director"/></div>
         <div class="ff full"><label>Título de la tesis doctoral</label><textarea id="eTesis" placeholder="Título completo o tentativo" rows="2"></textarea></div>
@@ -850,7 +870,7 @@ code{background:#F1F5F9;border:1px solid var(--borde);border-radius:5px;padding:
           </select>
         </div>
         <div class="ff"><label>Línea (si es director)</label>
-          <select id="uLinea"><option value="">—</option><option value="L1">L1 · Pedagogía e Infancia</option><option value="L2">L2 · Institución Educativa</option><option value="L3">L3 · TIC</option></select>
+          <select id="uLinea"><option value="">—</option><option value="Pedagogía e Infancia">Pedagogía e Infancia</option><option value="Institución Educativa, Currículo y Gestión">Institución Educativa, Currículo y Gestión</option><option value="Integración Educativa de las TIC">Integración Educativa de las TIC</option></select>
         </div>
       </div>
       <div style="background:var(--azulx);border-radius:8px;padding:10px 13px;font-size:.72rem;color:var(--txt2);margin-top:4px;line-height:1.6;">
@@ -874,6 +894,22 @@ code{background:#F1F5F9;border:1px solid var(--borde);border-radius:5px;padding:
     <div class="mf">
       <button class="btn bs" onclick="cerrarModal('rechazar')">Cancelar</button>
       <button class="btn" style="background:var(--rojob);color:var(--rojo);border:1px solid #FCA5A5" onclick="confirmarRechazar()">❌ Confirmar rechazo</button>
+    </div>
+  </div>
+</div>
+
+<div class="mov" id="modal-atender">
+  <div class="modal">
+    <div class="mh"><h3>Atender alerta · Enviar mensaje</h3><button class="mc" onclick="cerrarModal('atender')">✕</button></div>
+    <div class="mb">
+      <input type="hidden" id="atenderEstId"/>
+      <div class="ff full"><label>Mensaje al estudiante (puede editarlo antes de enviar)</label>
+        <textarea id="atenderMsg" rows="6"></textarea>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn bs" onclick="cerrarModal('atender')">Cancelar</button>
+      <button class="btn bp" onclick="confirmarEnviarAlerta()">📨 Enviar alerta al estudiante</button>
     </div>
   </div>
 </div>
@@ -1021,6 +1057,7 @@ function doLogin(){
 
   // Estudiante actual (si es estudiante)
   estSesion = null;
+  window._sesionUsuario = email;
   if(rolFinal==="estudiante"){
     const uu=ST.usuarios.find(function(u){return u.usuario===email;});
     if(uu&&uu.estId) estSesion=ST.estudiantes.find(function(e){return e.id===uu.estId;})||null;
@@ -1116,6 +1153,27 @@ function irA(v,btn){
 //  CONSTANTES
 // ══════════════════════════════════════
 const L={L1:"Pedagogía",L2:"Inst. Educativa",L3:"TIC"};
+const LINEA_NOMBRES={
+  "Pedagogía e Infancia":"Pedagogía e Infancia",
+  "Institución Educativa, Currículo y Gestión":"Institución Educativa, Currículo y Gestión",
+  "Integración Educativa de las TIC":"Integración Educativa de las TIC"
+};
+const _LINEA_MAP_G={
+  "L1":"Pedagogía e Infancia","pedagogía e infancia":"Pedagogía e Infancia","pedagogia e infancia":"Pedagogía e Infancia","pedagogía":"Pedagogía e Infancia","pedagogia":"Pedagogía e Infancia",
+  "L2":"Institución Educativa, Currículo y Gestión","institución educativa":"Institución Educativa, Currículo y Gestión","institucion educativa":"Institución Educativa, Currículo y Gestión",
+  "institución educativa, currículo y gestión":"Institución Educativa, Currículo y Gestión","institucion educativa, curriculo y gestion":"Institución Educativa, Currículo y Gestión",
+  "institución educativa currículo y gestión":"Institución Educativa, Currículo y Gestión","institucion educativa curriculo y gestion":"Institución Educativa, Currículo y Gestión",
+  "inst. educativa":"Institución Educativa, Currículo y Gestión",
+  "L3":"Integración Educativa de las TIC","integración educativa de las tic":"Integración Educativa de las TIC","integracion educativa de las tic":"Integración Educativa de las TIC",
+  "integración educativa de las tecnologías de la información y la comunicación":"Integración Educativa de las TIC",
+  "integracion educativa de las tecnologias de la informacion y la comunicacion":"Integración Educativa de las TIC",
+  "tic":"Integración Educativa de las TIC","integracion educativa":"Integración Educativa de las TIC","integración educativa":"Integración Educativa de las TIC"
+};
+function normLineaG(linea){
+  const v=(linea||"").trim();
+  if(!v)return"";
+  return _LINEA_MAP_G[v]||_LINEA_MAP_G[v.toLowerCase()]||v;
+}
 const EC={cumplido:"bve",progreso:"bam",pendiente:"bgr",critico:"bro"};
 const EN={cumplido:"Cumplido",progreso:"En progreso",pendiente:"Pendiente",critico:"Crítico"};
 const AEC={en_preparacion:"bgr",sometido:"baz",en_revision:"bam",revision_mayor:"bam",revision_menor:"bam",aceptado:"bte",publicado:"bve",rechazado:"bro"};
@@ -1175,7 +1233,7 @@ function renderDashEstudiante(){
       <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
         <div>
           <div style="font-size:1.1rem;font-weight:800;color:var(--azul);letter-spacing:-.02em">${e.nombre}</div>
-          <div style="font-size:.72rem;color:var(--txt3);margin-top:3px">Código: <strong>${e.id}</strong> &nbsp;·&nbsp; Cohorte: <strong>${e.cohorte||'—'}</strong> &nbsp;·&nbsp; ${L_FULL[e.linea]||e.linea||'—'}</div>
+          <div style="font-size:.72rem;color:var(--txt3);margin-top:3px">Código: <strong>${e.id}</strong> &nbsp;·&nbsp; Cohorte: <strong>${e.cohorte||'—'}</strong> &nbsp;·&nbsp; ${normLineaG(e.linea)||"—"}</div>
           <div style="font-size:.72rem;color:var(--txt2);margin-top:2px">Director: <strong>${e.director||'—'}</strong></div>
           ${e.tesis?`<div style="font-size:.71rem;color:var(--txt3);margin-top:3px;font-style:italic">"${e.tesis.substring(0,120)}${e.tesis.length>120?'…':''}"</div>`:''}
         </div>
@@ -1225,6 +1283,8 @@ function renderDashEstudiante(){
       <div class="ai-ic ${m.tipo==='critico'?'ic-r':m.tipo==='ambar'?'ic-a':'ic-v'}">${m.tipo==='critico'?'🚨':m.tipo==='ambar'?'⚠️':'✅'}</div>
       <div class="ai-t"><div class="ai-s">${m.msg}</div></div>
     </div>`).join('');
+    // Alertas enviadas por la Coordinación
+    if(e&&e.id) cargarAlertasCoordinacion(e.id);
   }
 
   // Cambiar encabezados tabla
@@ -1269,7 +1329,7 @@ function renderDashTabla(){
   document.getElementById("dashTbody").innerHTML=pg.map(e=>`<tr>
     <td><span style="font-weight:600">${e.nombre.split(",")[0]||e.nombre}</span></td>
     <td><span class="b bgr">${e.cohorte||"—"}</span></td>
-    <td><span class="b baz">${L[e.linea]||e.linea||"—"}</span></td>
+    <td><span class="b baz">${normLineaG(e.linea)||"—"}</span></td>
     <td style="min-width:130px">${(()=>{
       const artsAprobados=ST.articulos.filter(a=>(String(a.autorId)===String(e.id)||String(a.autorCodigo)===String(e.id))&&a.aprobado==='aprobado').length;
       const req=ST.config&&ST.config.arts||2;
@@ -1495,6 +1555,29 @@ function generarCertificadoPonencia(i){
   doc.save("Aval_Ponencia_"+nombre.replace(/\s+/g,"_")+".pdf");
 }
 
+function cargarAlertasCoordinacion(estId){
+  const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
+  if(!url)return;
+  fetch(url+"?action=get_alertas_estudiante&estudianteId="+encodeURIComponent(estId)+"&t="+Date.now())
+    .then(r=>r.text()).then(text=>{
+      const dashAl=document.getElementById("dashAlertas");
+      if(!dashAl)return;
+      const lines=text.split("\n").map(l=>l.trim()).filter(l=>l);
+      if(lines.length<2)return;
+      const headers=lines[0].replace(/\uFEFF/g,"").split(",").map(h=>h.replace(/"/g,"").trim().toLowerCase());
+      const idxMsg=headers.indexOf("mensaje"),idxFecha=headers.indexOf("fecha_envio");
+      const rows=lines.slice(1).map(line=>{
+        const vals=[];let cur="",inQ=false;
+        for(const c of line){if(c==='"')inQ=!inQ;else if(c===","&&!inQ){vals.push(cur.trim());cur="";}else cur+=c;}
+        vals.push(cur.trim());return vals;
+      });
+      const extra=rows.filter(r=>r[idxMsg]).slice(-5).reverse().map(r=>`<div class="ai-wrap">
+        <div class="ai-ic ic-a">📨</div>
+        <div class="ai-t"><div class="ai-n">Mensaje de la Coordinación · ${r[idxFecha]||''}</div><div class="ai-s" style="white-space:pre-line">${(r[idxMsg]||'').replace(/<[^>]*>/g,'')}</div></div>
+      </div>`).join('');
+      if(extra) dashAl.innerHTML+=extra;
+    }).catch(()=>{});
+}
 // ── ESTUDIANTES ──
 let estFilt=[...ST.estudiantes],estPag=1;const EPPG=10;
 function filtrarEst(q){
@@ -1504,7 +1587,7 @@ function filtrarEst(q){
   estFilt=ST.estudiantes.filter(e=>{
     const mq=!busq||(e.nombre+e.id+e.tesis).toLowerCase().includes(busq);
     const mc=!coh||e.cohorte===coh;
-    const ml=!lin||e.linea===lin;
+    const ml=!lin||normLineaG(e.linea)===lin;
     return mq&&mc&&ml;
   });
   estPag=1;renderEstTabla();
@@ -1527,7 +1610,7 @@ function renderEstTabla(){
       <td style="font-weight:600;font-size:.79rem">${e.nombre}</td>
       <td style="font-family:monospace;font-size:.73rem;color:var(--txt3)">${e.id}</td>
       <td><span class="b bgr">${e.cohorte||"—"}</span></td>
-      <td><span class="b baz">${L[e.linea]||e.linea||"—"}</span></td>
+      <td><span class="b baz">${normLineaG(e.linea)||"—"}</span></td>
       <td style="font-size:.74rem">${e.director||"—"}</td>
       <td style="font-size:.72rem;color:var(--txt2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.tesis||""}">${e.tesis?e.tesis.substring(0,55)+(e.tesis.length>55?"…":""):"—"}</td>
       <td style="text-align:center;font-weight:700;color:var(--azul)">${ST.articulos.filter(a=>String(a.autorId)===String(e.id)||String(a.autorCodigo)===String(e.id)).length}</td>
@@ -1568,7 +1651,7 @@ function editarEst(i){
   document.getElementById("eCodigo").value=e.id;
   document.getElementById("eCorreo").value=e.correo||"";
   document.getElementById("eCohorte").value=e.cohorte||"";
-  document.getElementById("eLinea").value=e.linea||"";
+  document.getElementById("eLinea").value=normLineaG(e.linea)||"";
   document.getElementById("eDirector").value=e.director||"";
   document.getElementById("eTesis").value=e.tesis||"";
   document.getElementById("eEstado").value=e.estado||"pendiente";
@@ -1909,6 +1992,9 @@ function renderMisArts(){
         <span class="b ${AEC[a.estado]||"bgr"}">${AEN[a.estado]||a.estado}</span>
         <span style="font-size:.7rem;font-style:italic;color:var(--txt2)">${a.revista||""}</span>
       </div>
+      ${a.aprobado==="aprobado"?`<div style="background:var(--verdeb);border-radius:10px;padding:10px 14px;margin-top:8px"><div style="font-weight:700;font-size:.8rem;color:var(--verde)">✅ Artículo aprobado por el director · Obligación cumplida</div></div>`
+        :a.aprobado==="rechazado"?`<div style="background:var(--rojob);border-radius:10px;padding:10px 14px;margin-top:8px"><div style="font-weight:700;font-size:.8rem;color:var(--rojo)">❌ Artículo rechazado · Revise observaciones</div>${a.obs_director?`<div style="font-size:.72rem;color:var(--rojo);margin-top:4px">Observación: ${a.obs_director}</div>`:""}</div>`
+        :`<div style="background:var(--ambarb);border-radius:10px;padding:10px 14px;margin-top:8px"><div style="font-weight:700;font-size:.8rem;color:var(--ambar)">⏳ Pendiente de verificación por la Coordinación</div></div>`}
       <div style="display:flex;gap:6px;margin-top:8px;">
         <button class="btn bs bsm" onclick="editarArt(${ST.articulos.indexOf(a)})">✏️ Actualizar estado</button>
       </div>
@@ -2031,41 +2117,33 @@ function renderIndicadores(){
   // Produccion por linea
   const il=document.getElementById("indLinea");
   if(il){
-    const lineas=["L1","L2","L3"];
-    const lnames={L1:"Pedagogía e Infancia",L2:"Institución Educativa",L3:"TIC"};
-    // Mapeo de nombres completos a códigos (por si vienen del Sheets)
-    const lineaMap={
-      "L1":"L1","pedagogía e infancia":"L1","pedagogia e infancia":"L1","pedagogía":"L1","pedagogia":"L1",
-      "L2":"L2","institución educativa":"L2","institucion educativa":"L2",
-      "institución educativa, currículo y gestión":"L2","institucion educativa, curriculo y gestion":"L2",
-      "institución educativa currículo y gestión":"L2","institucion educativa curriculo y gestion":"L2",
-      "institución educativa, curriculo y gestion":"L2","inst. educativa":"L2",
-      "institución educativa, currículo y gestión":"L2",
-      "L3":"L3","integración educativa de las tecnologías de la información y la comunicación":"L3",
-      "integracion educativa de las tecnologias de la informacion y la comunicacion":"L3",
-      "integración educativa de las tic":"L3","integracion educativa de las tic":"L3",
-      "integracion educativa de las tecnologias":"L3","tic":"L3",
-      "integración educativa de las tecnologías":"L3","integracion educativa":"L3",
-      "integración educativa de las tecnologías de la información y la comunicación":"L3"
-    };
-    const normLinea=e=>{const v=(e.linea||"").trim();return lineaMap[v]||lineaMap[v.toLowerCase()]||v;};
+    const lineas=["Pedagogía e Infancia","Institución Educativa, Currículo y Gestión","Integración Educativa de las TIC"];
     const ponTotal=ST.ponencias||[];
     const artTotal=ST.articulos||[];
     il.innerHTML=`<div style="font-size:.72rem;font-weight:700;color:var(--txt2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em">Ponencias y artículos por línea</div>`+
     lineas.map(l=>{
-      const ests=ST.estudiantes.filter(e=>normLinea(e)===l);
+      const ests=ST.estudiantes.filter(e=>normLineaG(e.linea)===l);
       const n=ests.length;
-      const estIds=ests.map(e=>e.id);
-      const ponVer=ponTotal.filter(p=>p.estado==="verificado"&&estIds.map(String).includes(String(p.estudianteId)));
-      const ponPend=ponTotal.filter(p=>(p.estado==="pendiente"||p.estado==="Pendiente verificacion"||p.estado==="Pendiente verificación")&&estIds.map(String).includes(String(p.estudianteId)));
-      const ponRech=ponTotal.filter(p=>p.estado==="rechazado"&&estIds.map(String).includes(String(p.estudianteId)));
-      const artsL=artTotal.filter(a=>estIds.map(String).includes(String(a.autorId))||estIds.map(String).includes(String(a.autorCodigo)));
+      const ponVer=ponTotal.filter(p=>p.estado==="verificado"&&ests.some(e=>String(e.id)===String(p.estudianteId)));
+      const ponPend=ponTotal.filter(p=>(p.estado==="pendiente"||p.estado==="Pendiente verificacion"||p.estado==="Pendiente verificación")&&ests.some(e=>String(e.id)===String(p.estudianteId)));
+      const ponRech=ponTotal.filter(p=>p.estado==="rechazado"&&ests.some(e=>String(e.id)===String(p.estudianteId)));
+      const estIds=ests.map(e=>String(e.id));
+      const artsL=artTotal.filter(a=>estIds.includes(String(a.autorId))||estIds.includes(String(a.autorCodigo)));
       const artsQ1=artsL.filter(a=>a.cuartil==="Q1").length;
       const artsQ2=artsL.filter(a=>a.cuartil==="Q2").length;
       const artsPub=artsL.filter(a=>a.estado==="publicado"||a.estado==="aceptado").length;
-      const nomVer=ponVer.map(p=>p.estudianteNombre||p.estudiante||"").filter(Boolean);
+      // Detalle por estudiante: qué obligación cumplió
+      const detalle=[];
+      ests.forEach(e=>{
+        const artsE=artTotal.filter(a=>(String(a.autorId)===String(e.id)||String(a.autorCodigo)===String(e.id))&&a.aprobado==="aprobado");
+        artsE.forEach((a,idx)=>{
+          detalle.push(`✅ ${e.nombre.split(",")[0]} — Artículo ${idx+1} aprobado (${a.cuartil||"Q2"})`);
+        });
+        const pon=ponTotal.find(p=>String(p.estudianteId)===String(e.id)&&p.estado==="verificado");
+        if(pon) detalle.push(`✅ ${e.nombre.split(",")[0]} — Ponencia verificada (${pon.evento||"—"})`);
+      });
       return`<div style="margin-bottom:16px;border-bottom:1px solid var(--borde);padding-bottom:12px">
-        <div style="font-size:.74rem;font-weight:700;margin-bottom:6px;color:var(--azul)">${lnames[l]}</div>
+        <div style="font-size:.74rem;font-weight:700;margin-bottom:6px;color:var(--azul)">${l}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
           <span class="b baz">${n} estudiante${n!==1?"s":""}</span>
           <span class="b bve">🎤 ${ponVer.length} verificada${ponVer.length!==1?"s":""}</span>
@@ -2076,7 +2154,7 @@ function renderIndicadores(){
           ${artsQ2?`<span class="b baz">Q2: ${artsQ2}</span>`:""}
           ${artsPub?`<span class="b bve">Pub: ${artsPub}</span>`:""}
         </div>
-        ${nomVer.length?`<div style="font-size:.68rem;color:var(--txt2);line-height:1.8;padding-left:4px">${nomVer.map(nm=>`✅ ${nm}`).join("<br>")}</div>`:""}
+        ${detalle.length?`<div style="font-size:.68rem;color:var(--txt2);line-height:1.8;padding-left:4px">${detalle.join("<br>")}</div>`:`<div style="font-size:.68rem;color:var(--txt3);padding-left:4px">Sin obligaciones cumplidas aún en esta línea.</div>`}
       </div>`;}).join("")+
     `<div style="margin-top:12px">
       <div style="font-size:.72rem;font-weight:700;color:var(--txt2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Artículos por estado editorial</div>
@@ -2129,13 +2207,41 @@ function renderAlertas2(){
   const nb=document.getElementById("nbadge");if(nb){nb.textContent=crit.length||"";nb.style.display=crit.length?"inline":"none";}
 }
 
+function generarMensajeAlerta(e){
+  const artsAprob=(ST.articulos||[]).filter(a=>(String(a.autorCodigo)===String(e.id)||String(a.autorId)===String(e.id))&&a.aprobado==="aprobado").length;
+  const req=ST.config.arts||2;
+  const falt=Math.max(0,req-artsAprob);
+  const pon=(ST.ponencias||[]).find(p=>String(p.estudianteId)===String(e.id));
+  const ponEstado=!pon?"No ha registrado su ponencia":pon.estado==="verificado"?"Ponencia verificada":pon.estado==="rechazado"?"Ponencia rechazada, debe reenviar soportes":"Ponencia pendiente de verificación";
+  let msg=`Estimado(a) ${e.nombre.split(",")[0]},\n\nLe recordamos su estado actual frente a las obligaciones académicas del Doctorado en Educación:\n\n`;
+  msg+=`• Artículos válidos (Q1/Q2, ISI/Scopus): ${artsAprob} de ${req}`+(falt>0?` · Faltan ${falt} artículo(s) por aprobar.\n`:` · Requisito cumplido.\n`);
+  msg+=`• Ponencia: ${ponEstado}.\n\n`;
+  msg+=`Por favor actualice su información en el Sistema de Seguimiento Doctoral o contacte a la Coordinación Académica si requiere apoyo.\n\nCoordinación Académica · Doctorados y Maestrías · Facultad de Educación · Universidad de La Sabana`;
+  return msg;
+}
+
 function atenderAlerta(nombreParcial){
-  const navEst=document.getElementById("nav-estudiantes");
-  irA("estudiantes",navEst);
-  setTimeout(()=>{
-    const input=document.querySelector("#v-estudiantes input[type=text]");
-    if(input){input.value=nombreParcial;filtrarEst(nombreParcial);}
-  },200);
+  const e=ST.estudiantes.find(x=>(x.nombre.split(",")[0]||"")===nombreParcial)||ST.estudiantes.find(x=>(x.nombre||"").includes(nombreParcial));
+  if(!e){toast("No se encontró el estudiante","err");return;}
+  document.getElementById("atenderEstId").value=e.id;
+  document.getElementById("atenderMsg").value=generarMensajeAlerta(e);
+  abrirModal("atender");
+}
+
+function confirmarEnviarAlerta(){
+  const estId=document.getElementById("atenderEstId").value;
+  const mensaje=document.getElementById("atenderMsg").value.trim();
+  const e=ST.estudiantes.find(x=>String(x.id)===String(estId));
+  if(!mensaje){toast("El mensaje no puede estar vacío","err");return;}
+  const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
+  if(!url){toast("No hay conexión configurada con Google Sheets","err");return;}
+  const qs="?action=alerta_enviar&estudiante="+encodeURIComponent(e?e.nombre:"")+"&estudianteId="+encodeURIComponent(estId)+"&mensaje="+encodeURIComponent(mensaje)+"&t="+Date.now();
+  const scr=document.createElement("script");
+  scr.src=url+qs+"&callback=_alertaCb";
+  window._alertaCb=function(){toast("✅ Alerta enviada al estudiante","ok");document.body.removeChild(scr);};
+  scr.onerror=function(){toast("Error al enviar la alerta","err");};
+  document.body.appendChild(scr);
+  cerrarModal("atender");
 }
 
 // ── USUARIOS ──
@@ -2164,11 +2270,7 @@ function autoFillFromEst(estId){
   // Auto-fill línea del estudiante
   const uLinea=document.getElementById("uLinea");
   if(uLinea&&e.linea){
-    const l=e.linea.toLowerCase();
-    if(l.includes("pedagog")) uLinea.value="L1";
-    else if(l.includes("instituci")||l.includes("curr")||l.includes("gesti")) uLinea.value="L2";
-    else if(l.includes("tecnolog")||l.includes("tic")||l.includes("integraci")) uLinea.value="L3";
-    else uLinea.value=e.linea;
+    uLinea.value=normLineaG(e.linea);
   }
 }
 function renderUsers(){
@@ -2178,7 +2280,7 @@ function renderUsers(){
     <td style="font-weight:600;font-size:.8rem">${u.nombre}</td>
     <td style="font-family:monospace;font-size:.79rem;color:var(--azulm);font-weight:600">@${u.usuario||"—"}</td>
     <td><span class="b baz">${ROLES_N[u.rol]||u.rol}</span></td>
-    <td style="font-size:.72rem;color:var(--txt3)">${u.linea||"—"}</td>
+    <td style="font-size:.72rem;color:var(--txt3)">${normLineaG(u.linea)||"—"}</td>
     <td style="font-family:monospace;font-size:.72rem">••••••</td>
     <td><span class="b bve">Activo</span></td>
     <td><div style="display:flex;gap:5px;">
@@ -2508,6 +2610,15 @@ async function cargarDesdeSheets(){
     if(cargados.length>0){
       ST.estudiantes=cargados;
       saveSt(ST);
+      if(rolActual==="estudiante"||(estSesion)){
+        const uu=ST.usuarios.find(function(u){return u.usuario===(window._sesionUsuario||"");});
+        let resuelto=null;
+        if(uu&&uu.estId) resuelto=ST.estudiantes.find(function(e){return e.id===uu.estId;})||null;
+        if(!resuelto&&uu&&uu.correo) resuelto=ST.estudiantes.find(function(e){return e.correo===uu.correo;})||null;
+        if(!resuelto&&estSesion&&estSesion.id) resuelto=ST.estudiantes.find(function(e){return e.id===estSesion.id;})||null;
+        if(!resuelto&&estSesion&&estSesion.nombre) resuelto=ST.estudiantes.find(function(e){return e.nombre===estSesion.nombre;})||null;
+        if(resuelto) estSesion=resuelto;
+      }
       renderAll();
       dashFilt=ST.estudiantes.slice();
       renderDash();
@@ -2733,7 +2844,8 @@ function exportCSV(){ exportExcelEstudiantes(); } // alias para compatibilidad
 
 function exportExcelEstudiantes(){
   try{
-  if(typeof XLSX==="undefined"){toast("Librería Excel no cargada. Verifique conexión a internet.","err");return;}
+  if(typeof XLSX==="undefined"){asegurarXLSX(exportExcelEstudiantes);return;}
+  if(!estFilt||!estFilt.length) estFilt=ST.estudiantes.slice();
   if(!estFilt||!estFilt.length){toast("No hay estudiantes para exportar","err");return;}
   const LNAMES={L1:"Pedagogía e Infancia",L2:"Institución Educativa, Currículo y Gestión",L3:"Integración Educativa de las TIC"};
   const wb=XLSX.utils.book_new();
@@ -2781,7 +2893,7 @@ function exportExcelEstudiantes(){
 }
 
 function exportExcelArticulos(){
-  if(typeof XLSX==="undefined"){toast("Librería Excel no cargada","err");return;}
+  if(typeof XLSX==="undefined"){asegurarXLSX(exportExcelArticulos);return;}
   const wb=XLSX.utils.book_new();
   const data=[
     ["REPORTE DE ARTÍCULOS CIENTÍFICOS · SISTEMA DOCTORAL · UNIVERSIDAD DE LA SABANA"],
@@ -2805,7 +2917,7 @@ function exportExcelArticulos(){
 
 // ── Excel Repositorio ──
 function exportExcelRepositorio(){
-  if(typeof XLSX==="undefined"){toast("Descargue desde GitHub Pages para Excel completo","err");return;}
+  if(typeof XLSX==="undefined"){asegurarXLSX(exportExcelRepositorio);return;}
   const pub=ST.articulos.filter(a=>a.estado==="publicado");
   const wb=XLSX.utils.book_new();
   const data=[
@@ -2852,7 +2964,7 @@ function exportPDFRepositorio(){
 // ── Excel Alertas ──
 function exportExcelAlertas(){
   const al=generarAlertas();
-  if(typeof XLSX==="undefined"){toast("Descargue desde GitHub Pages para Excel completo","err");return;}
+  if(typeof XLSX==="undefined"){asegurarXLSX(exportExcelAlertas);return;}
   const wb=XLSX.utils.book_new();
   const data=[
     ["ALERTAS DEL SISTEMA · SISTEMA DOCTORAL · UNIVERSIDAD DE LA SABANA"],
@@ -2898,7 +3010,7 @@ function exportPDFAlertas(){
 }
 
 function exportExcelIndicadores(){
-  if(typeof XLSX==="undefined"){toast("Librería Excel no cargada","err");return;}
+  if(typeof XLSX==="undefined"){asegurarXLSX(exportExcelIndicadores);return;}
   const wb=XLSX.utils.book_new();
   const LNAMES={L1:"Pedagogía e Infancia",L2:"Institución Educativa",L3:"TIC"};
   const cohs=[...new Set(ST.estudiantes.map(e=>e.cohorte))].sort();
@@ -2922,15 +3034,58 @@ function exportExcelIndicadores(){
     data.push([c,ests.length,cum,prog,pend,ests.length?Math.round(cum/ests.length*100)+"%":"0%"]);
   });
   data.push([],[],[" LÍNEA","Estudiantes","Artículos registrados"]);
-  ["L1","L2","L3"].forEach(l=>{
-    data.push([LNAMES[l],ST.estudiantes.filter(e=>e.linea===l).length,
-      ST.articulos.filter(a=>ST.estudiantes.find(e=>e.id===a.autorId&&e.linea===l)).length]);
+  ["Pedagogía e Infancia","Institución Educativa, Currículo y Gestión","Integración Educativa de las TIC"].forEach(l=>{
+    const ests=ST.estudiantes.filter(e=>normLineaG(e.linea)===l);
+    const ids=ests.map(e=>String(e.id));
+    data.push([l,ests.length,ST.articulos.filter(a=>ids.includes(String(a.autorId))||ids.includes(String(a.autorCodigo))).length]);
   });
   const ws=XLSX.utils.aoa_to_sheet(data);
   ws["!cols"]=[{wch:32},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
   XLSX.utils.book_append_sheet(wb,"Indicadores",ws);
   XLSX.writeFile(wb,"Sistema_Doctoral_Indicadores_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("✅ Excel descargado correctamente","ok");
+}
+
+// ── Excel / PDF Estado del requisito (Dashboard) ──
+function _estadoRequisitoData(){
+  return dashFilt.map(e=>{
+    const artsAprobados=ST.articulos.filter(a=>(String(a.autorId)===String(e.id)||String(a.autorCodigo)===String(e.id))&&a.aprobado==='aprobado').length;
+    const req=ST.config&&ST.config.arts||2;
+    const pon=(ST.ponencias||[]).find(p=>String(p.estudianteId)===String(e.id));
+    const ponEstado=!pon?"Sin subir":pon.estado==='verificado'?"Verificada":pon.estado==='rechazado'?"Rechazada":"Pendiente";
+    return{nombre:e.nombre,cohorte:e.cohorte||"—",linea:normLineaG(e.linea)||"—",arts:artsAprobados,req,ponEstado};
+  });
+}
+function exportExcelEstadoRequisito(){
+  if(typeof XLSX==="undefined"){asegurarXLSX(exportExcelEstadoRequisito);return;}
+  const wb=XLSX.utils.book_new();
+  const data=[
+    ["ESTUDIANTES · ESTADO DEL REQUISITO · SISTEMA DOCTORAL · UNIVERSIDAD DE LA SABANA"],
+    ["Generado: "+new Date().toLocaleString("es-CO")],
+    [],
+    ["Estudiante","Cohorte","Línea","Artículos aprobados","Requisito","Estado ponencia"]
+  ];
+  _estadoRequisitoData().forEach(r=>data.push([r.nombre,r.cohorte,r.linea,r.arts,r.req,r.ponEstado]));
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  ws["!cols"]=[{wch:32},{wch:10},{wch:32},{wch:16},{wch:12},{wch:16}];
+  ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:5}}];
+  XLSX.utils.book_append_sheet(wb,"Estado del Requisito",ws);
+  XLSX.writeFile(wb,"Estado_Requisito_"+new Date().toISOString().slice(0,10)+".xlsx");
+  toast("✅ Excel descargado correctamente","ok");
+}
+function exportPDFEstadoRequisito(){
+  const rows=_estadoRequisitoData().map(r=>`<tr>
+    <td style="font-weight:600">${r.nombre}</td>
+    <td>${r.cohorte}</td>
+    <td>${r.linea}</td>
+    <td style="text-align:center">${r.arts}/${r.req}</td>
+    <td>${r.ponEstado}</td>
+  </tr>`).join("");
+  const contenido=`<div class="section-title">Estudiantes · Estado del requisito · Cumplimiento de ${ST.config&&ST.config.arts||2} artículos ISI/Scopus Q1–Q2</div>
+  <table><thead><tr><th>Estudiante</th><th>Cohorte</th><th>Línea</th><th>Arts. aprobados</th><th>Estado ponencia</th></tr></thead>
+  <tbody>${rows}</tbody></table>`;
+  generarPDFBase("Estado del Requisito · Sistema Doctoral",contenido);
+  toast("PDF generándose en nueva ventana","ok");
 }
 
 // ══ PDF INSTITUCIONAL ══
