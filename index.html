@@ -505,7 +505,7 @@ function xlsxDownload(wb,filename){
             </div>
           </div>
           <div class="tw"><table>
-            <thead><tr><th><input type="checkbox" id="chkAll" onchange="selTodos(this.checked)"/></th><th>Nombre</th><th>Código</th><th>Cohorte</th><th>Línea</th><th>Director</th><th>Título de tesis</th><th>Arts.</th><th>Estado ponencia</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Nombre</th><th>Código</th><th>Cohorte</th><th>Línea</th><th>Director</th><th>Título de tesis</th><th>Arts.</th><th>Estado ponencia</th><th>Acciones</th></tr></thead>
             <tbody id="estTbody"></tbody>
           </table></div>
           <div class="pgw">
@@ -513,7 +513,6 @@ function xlsxDownload(wb,filename){
             <div class="pgb" id="estPgB"></div>
             <button class="btn bs bsm" onclick="exportExcelEstudiantes()">📊 Excel</button>
             <button class="btn bs bsm" onclick="exportPDFEstudiantes()">📄 PDF</button>
-            <button class="btn bd bsm" id="btnDelSel" style="margin-left:6px;display:none" onclick="eliminarSel()">🗑️ Eliminar sel.</button>
           </div>
         </div>
         <!-- CARGA MASIVA -->
@@ -654,7 +653,7 @@ function xlsxDownload(wb,filename){
         </div>
         <div class="g2">
           <div class="card">
-            <div class="ch"><div class="ct2">Cumplimiento por cohorte</div></div>
+            <div class="ch"><div class="ct2">Obligaciones académicas culminadas</div><div class="cs">2 artículos aprobados + ponencia verificada</div></div>
             <div class="cb" id="indCohorte"></div>
           </div>
           <div class="card">
@@ -1056,6 +1055,7 @@ function doLogin(){
     err.innerHTML="Contraseña incorrecta.";err.classList.add("on");return;
   }
   const rolFinal = u ? u.rol : rolActual;
+  rolActual = rolFinal;
 
   const cfg=ROLES_CFG[rolFinal];
   document.getElementById("loginPage").style.display="none";
@@ -1123,6 +1123,9 @@ function doLogout(){
   document.getElementById("lEmail").value="";
   document.getElementById("lPass").value="";
   document.getElementById("lErr").classList.remove("on");
+  document.querySelectorAll(".mov.on").forEach(m=>m.classList.remove("on"));
+  estSesion=null;
+  window._sesionUsuario=null;
 }
 function cambiarUsuario(){
   // Vuelve al login conservando todos los datos
@@ -1131,6 +1134,9 @@ function cambiarUsuario(){
   document.getElementById("lEmail").value="";
   document.getElementById("lPass").value="";
   document.getElementById("lErr").classList.remove("on");
+  document.querySelectorAll(".mov.on").forEach(m=>m.classList.remove("on"));
+  estSesion=null;
+  window._sesionUsuario=null;
   // Mostrar mensaje de cambio
   setTimeout(()=>{
     const err=document.getElementById("lErr");
@@ -1601,15 +1607,33 @@ function cargarAlertasCoordinacion(estId){
     .then(r=>r.text()).then(text=>{
       const dashAl=document.getElementById("dashAlertas");
       if(!dashAl)return;
-      const lines=text.split("\n").map(l=>l.trim()).filter(l=>l);
-      if(lines.length<2)return;
-      const headers=lines[0].replace(/\uFEFF/g,"").split(",").map(h=>h.replace(/"/g,"").trim().toLowerCase());
+      // Parser CSV consciente de comillas y saltos de línea dentro de campos
+      function parseCSV(t){
+        const rows=[];let row=[],cur="",inQ=false;
+        for(let i=0;i<t.length;i++){
+          const c=t[i];
+          if(inQ){
+            if(c==='"'){
+              if(t[i+1]==='"'){cur+='"';i++;}
+              else inQ=false;
+            } else cur+=c;
+          } else {
+            if(c==='"') inQ=true;
+            else if(c===','){row.push(cur);cur="";}
+            else if(c==='\n'||c==='\r'){
+              if(c==='\r'&&t[i+1]==='\n')i++;
+              row.push(cur);cur="";rows.push(row);row=[];
+            } else cur+=c;
+          }
+        }
+        if(cur!==""||row.length){row.push(cur);rows.push(row);}
+        return rows.filter(r=>r.some(v=>v.trim()!==""));
+      }
+      const allRows=parseCSV(text);
+      if(allRows.length<2)return;
+      const headers=allRows[0].map(h=>h.replace(/\uFEFF/g,"").trim().toLowerCase());
       const idxMsg=headers.indexOf("mensaje"),idxFecha=headers.indexOf("fecha_envio");
-      const rows=lines.slice(1).map(line=>{
-        const vals=[];let cur="",inQ=false;
-        for(const c of line){if(c==='"')inQ=!inQ;else if(c===","&&!inQ){vals.push(cur.trim());cur="";}else cur+=c;}
-        vals.push(cur.trim());return vals;
-      }).filter(r=>r[idxMsg]);
+      const rows=allRows.slice(1).filter(r=>r[idxMsg]&&r[idxMsg].trim());
       if(!rows.length)return;
       const ultimo=rows[rows.length-1];
       const fecha=ultimo[idxFecha]||"";
@@ -1668,7 +1692,6 @@ function renderEstTabla(){
   document.getElementById("estTbody").innerHTML=pg.map(e=>{
     const ri=ST.estudiantes.indexOf(e);
     return`<tr>
-      <td><input type="checkbox" class="chkR" data-i="${ri}" onchange="updDelBtn()"/></td>
       <td style="font-weight:600;font-size:.79rem">${e.nombre}</td>
       <td style="font-family:monospace;font-size:.73rem;color:var(--txt3)">${e.id}</td>
       <td><span class="b bgr">${e.cohorte||"—"}</span></td>
@@ -1695,17 +1718,6 @@ function renderEstTabla(){
     `<button class="pgbtn${estPag===i+1?" on":""}" onclick="estPag=${i+1};renderEstTabla()">${i+1}</button>`).join("");
 }
 
-function updDelBtn(){
-  const n=document.querySelectorAll(".chkR:checked").length;
-  const btn=document.getElementById("btnDelSel");
-  if(btn){btn.style.display=n?"inline-flex":"none";btn.textContent=`🗑️ Eliminar (${n})`;}
-}
-function selTodos(v){document.querySelectorAll(".chkR").forEach(c=>c.checked=v);updDelBtn();}
-function eliminarSel(){
-  const idx=[...document.querySelectorAll(".chkR:checked")].map(c=>parseInt(c.dataset.i)).sort((a,b)=>b-a);
-  if(!confirm(`¿Eliminar ${idx.length} estudiante(s)?`))return;
-  idx.forEach(i=>ST.estudiantes.splice(i,1));saveSt(ST);filtrarEst();toast("Eliminados exitosamente","ok");
-}
 function editarEst(i){
   const e=ST.estudiantes[i];
   document.getElementById("estIdx").value=i;
@@ -1969,6 +1981,19 @@ function guardarArt(){
     autorId:autorId};
   const idx=document.getElementById("artIdx").value;
   const esNuevo=idx==="";
+  const esEstudianteEditando=rolActual==="estudiante";
+  let reabrirRevision=false;
+  if(!esNuevo){
+    const previo=ST.articulos[parseInt(idx)];
+    if(esEstudianteEditando&&previo&&(previo.aprobado==="aprobado"||previo.aprobado==="rechazado")){
+      reabrirRevision=true;
+      obj.aprobado=undefined;
+      obj.obs_director="";
+    } else {
+      obj.aprobado=previo?previo.aprobado:undefined;
+      obj.obs_director=previo?previo.obs_director:"";
+    }
+  }
   if(!esNuevo)ST.articulos[parseInt(idx)]=obj;
   else ST.articulos.unshift(obj);
   saveSt(ST);
@@ -2004,6 +2029,7 @@ function guardarArt(){
       +"&doi="+encodeURIComponent(obj.doi||"")
       +"&link="+encodeURIComponent(link)
       +"&fecha="+encodeURIComponent(obj.fecha||"")
+      +(reabrirRevision?"&validacion=pendiente&observacion=":"")
       +"&ts="+Date.now();
     document.head.appendChild(s);
     setTimeout(()=>{try{document.head.removeChild(s);}catch(e){}},5000);
@@ -2147,8 +2173,11 @@ function renderMiAvance(){
 // ── REPOSITORIO ──
 function filtrarRepo(q){
   const pub=ST.articulos.filter(a=>a.estado==="publicado"&&(!q||(a.titulo+a.revista).toLowerCase().includes(q.toLowerCase())));
+  const esCoordView=["coordinadora","direccion","director"].includes(rolActual);
   document.getElementById("repoList").innerHTML=pub.length?pub.map(a=>{
     const arch=loadArtArch(artArchKey(a))||{};
+    const esPropio=rolActual==="estudiante"&&estSesion&&(a.autorId===estSesion.id||a.autorCodigo===estSesion.id||a.autorNombre===estSesion.nombre);
+    const verAdjuntos=esCoordView||esPropio;
     return`<div class="acard">
       <div class="acard-t">${a.titulo}</div>
       <div class="acard-m">
@@ -2161,10 +2190,10 @@ function filtrarRepo(q){
       ${a.doi&&!/^https?:\/\//i.test(a.doi)?`<div style="font-size:.7rem;color:var(--txt2);margin-top:3px">🔗 DOI: ${a.doi}</div>`:""}
       ${a.link?`<div style="font-size:.7rem;margin-top:3px">🌐 <a href="${a.link}" target="_blank" style="color:var(--azulm);word-break:break-all">${a.link}</a></div>`:""}
       ${a.resumen?`<div style="font-size:.72rem;color:var(--txt2);margin-top:6px;line-height:1.5">${a.resumen}</div>`:""}
-      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+      ${verAdjuntos?`<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
         ${arch.adj1b64?`<button class="btn bs bsm" onclick="verAdjArt('${artArchKey(a)}',1)">📄 Ver adjunto 1</button>`:""}
         ${arch.adj2b64?`<button class="btn bs bsm" onclick="verAdjArt('${artArchKey(a)}',2)">📄 Ver adjunto 2</button>`:""}
-      </div>
+      </div>`:""}
     </div>`;}).join(""):`<p style="color:var(--txt3);font-size:.8rem;padding:10px 0">No hay artículos publicados en el repositorio aún.</p>`;
 }
 function renderRepo(){filtrarRepo("");}
@@ -2178,15 +2207,18 @@ function renderIndicadores(){
   const tasa=ST.articulos.length?Math.round(pub/ST.articulos.length*100)+"%":"—";
   const el=document.getElementById("indMedia");if(el)el.textContent=media;
   const el2=document.getElementById("indTasa");if(el2)el2.textContent=tasa;
-  // Cumplimiento por cohorte
-  const cohs=[...new Set(ST.estudiantes.map(e=>e.cohorte))].sort();
+  // Obligaciones académicas culminadas
   const ic=document.getElementById("indCohorte");
-  if(ic)ic.innerHTML=cohs.length?cohs.map(c=>{
-    const ests=ST.estudiantes.filter(e=>e.cohorte===c);
-    const cum=ests.filter(e=>e.estado==="cumplido").length;
-    const pct=ests.length?Math.round(cum/ests.length*100):0;
-    return`<div style="margin-bottom:11px;"><div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="font-size:.75rem;font-weight:600">Cohorte ${c}</span><span style="font-size:.7rem;color:var(--txt3)">${cum}/${ests.length} · ${pct}%</span></div>
-    <div class="pb"><div class="pf ${pct>=50?"pfv":pct>0?"pfa":"pfr"}" style="width:${pct}%"></div></div></div>`;}).join(""):`<p style="color:var(--txt3);font-size:.78rem">Sin datos.</p>`;
+  if(ic){
+    const req2=(ST.config&&ST.config.arts)||2;
+    const culminados=ST.estudiantes.filter(e=>{
+      const artsAprob=ST.articulos.filter(a=>(String(a.autorCodigo)===String(e.id)||String(a.autorId)===String(e.id))&&a.aprobado==="aprobado").length;
+      const pon=(ST.ponencias||[]).find(p=>String(p.estudianteId)===String(e.id));
+      return artsAprob>=req2&&pon&&pon.estado==="verificado";
+    });
+    ic.innerHTML=culminados.length?`<div style="font-size:.74rem;color:var(--txt2);line-height:1.9">${culminados.map(e=>`<div>🎓 <strong>${e.nombre.split(",")[0]}</strong> · ${normLineaG(e.linea)||"—"} · Cohorte ${e.cohorte||"—"}</div>`).join("")}</div>`
+      :`<p style="color:var(--txt3);font-size:.78rem">Ningún estudiante ha culminado la totalidad de sus obligaciones académicas todavía.</p>`;
+  }
   // Produccion por linea
   const il=document.getElementById("indLinea");
   if(il){
@@ -2252,20 +2284,7 @@ function renderIndicadores(){
           <span class="b bte" style="font-size:.67rem">${label}</span>
           <span style="font-weight:700;font-size:.72rem;color:var(--azul)">${nI}</span>
         </div>`;}).join("")}
-    </div>`+
-    (()=>{
-      const req2=ST.config&&ST.config.arts||2;
-      const culminados=ST.estudiantes.filter(e=>{
-        const artsAprob=(artTotal).filter(a=>(String(a.autorCodigo)===String(e.id)||String(a.autorId)===String(e.id))&&a.aprobado==="aprobado").length;
-        const pon=ponTotal.find(p=>String(p.estudianteId)===String(e.id));
-        return artsAprob>=req2&&pon&&pon.estado==="verificado";
-      });
-      return `<div style="margin-top:16px;border-top:1px solid var(--borde);padding-top:12px">
-        <div style="font-size:.72rem;font-weight:700;color:var(--verde);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">✅ Obligaciones académicas culminadas (${req2} artículos aprobados + ponencia verificada)</div>
-        ${culminados.length?`<div style="font-size:.74rem;color:var(--txt2);line-height:1.9">${culminados.map(e=>`<div>🎓 <strong>${e.nombre.split(",")[0]}</strong> · ${normLineaG(e.linea)||"—"} · Cohorte ${e.cohorte||"—"}</div>`).join("")}</div>`
-          :`<div style="font-size:.74rem;color:var(--txt3)">Ningún estudiante ha culminado la totalidad de sus obligaciones académicas todavía.</div>`}
-      </div>`;
-    })();
+    </div>`;
   }
 }
 
@@ -3106,38 +3125,55 @@ function exportPDFAlertas(){
   toast("PDF alertas generándose","ok");
 }
 
+function _indicadoresData(){
+  const req2=(ST.config&&ST.config.arts)||2;
+  const total=ST.estudiantes.length||1;
+  const pub=ST.articulos.filter(a=>a.estado==="publicado"||a.estado==="aceptado").length;
+  const tasa=ST.articulos.length?Math.round(pub/ST.articulos.length*100):0;
+  const media=(ST.articulos.length/total).toFixed(1);
+  const lineas=["Pedagogía e Infancia","Institución Educativa, Currículo y Gestión","Integración Educativa de las TIC"];
+  const porLinea=lineas.map(l=>{
+    const ests=ST.estudiantes.filter(e=>normLineaG(e.linea)===l);
+    const ids=ests.map(e=>String(e.id));
+    const artsL=ST.articulos.filter(a=>ids.includes(String(a.autorId))||ids.includes(String(a.autorCodigo)));
+    const ponVer=(ST.ponencias||[]).filter(p=>p.estado==="verificado"&&ests.some(e=>String(e.id)===String(p.estudianteId)));
+    return{linea:l,estudiantes:ests.length,articulos:artsL.length,
+      q1:artsL.filter(a=>a.cuartil==="Q1").length,q2:artsL.filter(a=>a.cuartil==="Q2").length,
+      publicados:artsL.filter(a=>a.estado==="publicado"||a.estado==="aceptado").length,
+      ponenciasVerificadas:ponVer.length};
+  });
+  const culminados=ST.estudiantes.filter(e=>{
+    const artsAprob=ST.articulos.filter(a=>(String(a.autorCodigo)===String(e.id)||String(a.autorId)===String(e.id))&&a.aprobado==="aprobado").length;
+    const pon=(ST.ponencias||[]).find(p=>String(p.estudianteId)===String(e.id));
+    return artsAprob>=req2&&pon&&pon.estado==="verificado";
+  }).map(e=>({nombre:e.nombre,linea:normLineaG(e.linea)||"—",cohorte:e.cohorte||"—"}));
+  return{req2,total:ST.estudiantes.length,totalArts:ST.articulos.length,pub,tasa,media,porLinea,culminados};
+}
 function exportExcelIndicadores(){
   if(typeof XLSX==="undefined"){asegurarXLSX(exportExcelIndicadores);return;}
   const wb=XLSX.utils.book_new();
-  const LNAMES={L1:"Pedagogía e Infancia",L2:"Institución Educativa",L3:"TIC"};
-  const cohs=[...new Set(ST.estudiantes.map(e=>e.cohorte))].sort();
+  const d=_indicadoresData();
   const data=[
     ["INDICADORES ACADÉMICOS · SISTEMA DOCTORAL · UNIVERSIDAD DE LA SABANA"],
     ["Generado: "+new Date().toLocaleString("es-CO")],
     [],
     ["","RESUMEN GENERAL"],
-    ["Total estudiantes",ST.estudiantes.length],
-    ["Total artículos",ST.articulos.length],
-    ["Requisito cumplido",ST.estudiantes.filter(e=>e.estado==="cumplido").length],
-    ["En riesgo crítico",ST.estudiantes.filter(e=>e.estado==="critico").length],
+    ["Total estudiantes",d.total],
+    ["Total artículos registrados",d.totalArts],
+    ["Artículos publicados/aceptados",d.pub],
+    ["Tasa de aceptación",d.tasa+"%"],
+    ["Promedio artículos/estudiante",d.media],
+    ["Obligaciones culminadas (estudiantes)",d.culminados.length],
     [],
-    ["COHORTE","Estudiantes","Cumplieron","En progreso","Pendiente","% Cumplimiento"],
+    ["PRODUCCIÓN POR LÍNEA","Estudiantes","Artículos","Q1","Q2","Publicados","Ponencias verificadas"],
   ];
-  cohs.forEach(c=>{
-    const ests=ST.estudiantes.filter(e=>e.cohorte===c);
-    const cum=ests.filter(e=>e.estado==="cumplido").length;
-    const prog=ests.filter(e=>e.estado==="progreso").length;
-    const pend=ests.filter(e=>e.estado==="pendiente"||e.estado==="critico").length;
-    data.push([c,ests.length,cum,prog,pend,ests.length?Math.round(cum/ests.length*100)+"%":"0%"]);
-  });
-  data.push([],[],[" LÍNEA","Estudiantes","Artículos registrados"]);
-  ["Pedagogía e Infancia","Institución Educativa, Currículo y Gestión","Integración Educativa de las TIC"].forEach(l=>{
-    const ests=ST.estudiantes.filter(e=>normLineaG(e.linea)===l);
-    const ids=ests.map(e=>String(e.id));
-    data.push([l,ests.length,ST.articulos.filter(a=>ids.includes(String(a.autorId))||ids.includes(String(a.autorCodigo))).length]);
-  });
+  d.porLinea.forEach(p=>data.push([p.linea,p.estudiantes,p.articulos,p.q1,p.q2,p.publicados,p.ponenciasVerificadas]));
+  data.push([],["OBLIGACIONES ACADÉMICAS CULMINADAS ("+d.req2+" artículos aprobados + ponencia verificada)"]);
+  data.push(["Estudiante","Línea","Cohorte"]);
+  if(d.culminados.length) d.culminados.forEach(c=>data.push([c.nombre,c.linea,c.cohorte]));
+  else data.push(["Ningún estudiante ha culminado todas sus obligaciones académicas todavía.","",""]);
   const ws=XLSX.utils.aoa_to_sheet(data);
-  ws["!cols"]=[{wch:32},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
+  ws["!cols"]=[{wch:34},{wch:32},{wch:12},{wch:10},{wch:10},{wch:14},{wch:18}];
   XLSX.utils.book_append_sheet(wb,ws,"Indicadores");
   xlsxDownload(wb,"Sistema_Doctoral_Indicadores_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("✅ Excel descargado correctamente","ok");
@@ -3306,9 +3342,13 @@ function exportPDFFichaPropia(){
 // ── PDF Ficha individual ──
 function exportPDFFicha(idx){
   const e=ST.estudiantes[idx];if(!e)return;
-  const LNAMES={L1:"Pedagogía e Infancia",L2:"Institución Educativa, Currículo y Gestión",L3:"Integración Educativa de las TIC"};
-  const pct=Math.min(100,Math.round((e.arts||0)/2*100));
-  const artsEst=ST.articulos.filter(a=>a.estudianteId===e.id||a.estudianteNombre===e.nombre);
+  const reqArts=(ST.config&&ST.config.arts)||2;
+  const artsEst=ST.articulos.filter(a=>a.autorId===e.id||a.autorCodigo===e.id||a.autorNombre===e.nombre);
+  const artsVal=artsEst.filter(a=>a.aprobado==="aprobado").length;
+  const pct=Math.min(100,Math.round(artsVal/reqArts*100));
+  const pon=(ST.ponencias||[]).find(p=>String(p.estudianteId)===String(e.id));
+  const ponEstado=!pon?"Sin subir":pon.estado==="verificado"?"Verificada":pon.estado==="rechazado"?"Rechazada":"Pendiente";
+  const ponCSS=!pon?"ba":pon.estado==="verificado"?"bv":pon.estado==="rechazado"?"br":"ba";
   const artsHTML=artsEst.length?artsEst.map(a=>{
     const apCSS=a.aprobado==="aprobado"?"bv":a.aprobado==="rechazado"?"br":"ba";
     return`<tr>
@@ -3324,7 +3364,7 @@ function exportPDFFicha(idx){
     <div class="ficha-row">
       <div class="ficha-field"><div class="ficha-label">Código</div><div class="ficha-val">${e.id}</div></div>
       <div class="ficha-field"><div class="ficha-label">Cohorte</div><div class="ficha-val">${e.cohorte||"—"}</div></div>
-      <div class="ficha-field"><div class="ficha-label">Línea</div><div class="ficha-val">${LNAMES[e.linea]||e.linea||"—"}</div></div>
+      <div class="ficha-field"><div class="ficha-label">Línea</div><div class="ficha-val">${normLineaG(e.linea)||"—"}</div></div>
     </div>
     <div class="ficha-row">
       <div class="ficha-field"><div class="ficha-label">Director</div><div class="ficha-val">${e.director||"—"}</div></div>
@@ -3334,10 +3374,10 @@ function exportPDFFicha(idx){
   </div>
   <div class="section-title" style="margin-top:12px">Progreso · Requisito de graduación</div>
   <div class="kpi-row">
-    <div class="kpi-box"><div class="kpi-v">${e.arts||0}</div><div class="kpi-l">Artículos válidos</div></div>
-    <div class="kpi-box"><div class="kpi-v">2</div><div class="kpi-l">Requeridos</div></div>
+    <div class="kpi-box"><div class="kpi-v">${artsVal}</div><div class="kpi-l">Artículos válidos</div></div>
+    <div class="kpi-box"><div class="kpi-v">${reqArts}</div><div class="kpi-l">Requeridos</div></div>
     <div class="kpi-box"><div class="kpi-v">${pct}%</div><div class="kpi-l">Cumplimiento</div></div>
-    <div class="kpi-box"><div class="kpi-v"><span class="badge ${e.estado==="cumplido"?"bv":e.estado==="critico"?"br":"ba"}">${EN[e.estado]||e.estado}</span></div><div class="kpi-l">Estado</div></div>
+    <div class="kpi-box"><div class="kpi-v"><span class="badge ${ponCSS}">${ponEstado}</span></div><div class="kpi-l">Ponencia</div></div>
   </div>
   <div class="prog-bar" style="height:10px;margin-bottom:14px"><div class="prog-fill" style="width:${pct}%"></div></div>
   <div class="section-title">Artículos científicos registrados</div>
@@ -3399,23 +3439,34 @@ function exportPDFAlertas(){
 
 // ── PDF Indicadores ──
 function exportPDFIndicadores(){
-  const total=ST.estudiantes.length||1;
-  const cum=ST.estudiantes.filter(e=>e.estado==="cumplido").length;
-  const cohs=[...new Set(ST.estudiantes.map(e=>e.cohorte))].sort();
-  const cohRows=cohs.map(c=>{
-    const ests=ST.estudiantes.filter(e=>e.cohorte===c);
-    const cc=ests.filter(e=>e.estado==="cumplido").length;
-    return`<tr><td>${c}</td><td style="text-align:center">${ests.length}</td><td style="text-align:center">${cc}</td><td style="text-align:center">${ests.length?Math.round(cc/ests.length*100):0}%</td></tr>`;}).join("");
+  const d=_indicadoresData();
+  const lineaRows=d.porLinea.map(p=>`<tr>
+    <td style="font-weight:600">${p.linea}</td>
+    <td style="text-align:center">${p.estudiantes}</td>
+    <td style="text-align:center">${p.articulos}</td>
+    <td style="text-align:center">${p.q1}</td>
+    <td style="text-align:center">${p.q2}</td>
+    <td style="text-align:center">${p.publicados}</td>
+    <td style="text-align:center">${p.ponenciasVerificadas}</td>
+  </tr>`).join("");
+  const culmRows=d.culminados.length?d.culminados.map(c=>`<tr>
+    <td style="font-weight:600">${c.nombre}</td>
+    <td>${c.linea}</td>
+    <td style="text-align:center">${c.cohorte}</td>
+  </tr>`).join(""):`<tr><td colspan="3" style="text-align:center">Ningún estudiante ha culminado todas sus obligaciones académicas todavía.</td></tr>`;
   const contenido=`
   <div class="kpi-row">
-    <div class="kpi-box"><div class="kpi-v">${ST.estudiantes.length}</div><div class="kpi-l">Estudiantes activos</div></div>
-    <div class="kpi-box"><div class="kpi-v">${ST.articulos.length}</div><div class="kpi-l">Artículos registrados</div></div>
-    <div class="kpi-box"><div class="kpi-v">${Math.round(cum/total*100)}%</div><div class="kpi-l">Requisito cumplido</div></div>
-    <div class="kpi-box"><div class="kpi-v">${(ST.articulos.length/total).toFixed(1)}</div><div class="kpi-l">Arts. por estudiante</div></div>
+    <div class="kpi-box"><div class="kpi-v">${d.total}</div><div class="kpi-l">Estudiantes activos</div></div>
+    <div class="kpi-box"><div class="kpi-v">${d.totalArts}</div><div class="kpi-l">Artículos registrados</div></div>
+    <div class="kpi-box"><div class="kpi-v">${d.tasa}%</div><div class="kpi-l">Tasa de aceptación</div></div>
+    <div class="kpi-box"><div class="kpi-v">${d.media}</div><div class="kpi-l">Arts. por estudiante</div></div>
   </div>
-  <div class="section-title">Cumplimiento por cohorte</div>
-  <table><thead><tr><th>Cohorte</th><th>Estudiantes</th><th>Cumplieron</th><th>% Cumplimiento</th></tr></thead>
-  <tbody>${cohRows||"<tr><td colspan='4' style='text-align:center'>Sin datos</td></tr>"}</tbody></table>`;
+  <div class="section-title">Producción por línea</div>
+  <table><thead><tr><th>Línea</th><th>Estudiantes</th><th>Artículos</th><th>Q1</th><th>Q2</th><th>Publicados</th><th>Ponencias verificadas</th></tr></thead>
+  <tbody>${lineaRows}</tbody></table>
+  <div class="section-title" style="margin-top:14px">Obligaciones académicas culminadas (${d.req2} artículos aprobados + ponencia verificada)</div>
+  <table><thead><tr><th>Estudiante</th><th>Línea</th><th>Cohorte</th></tr></thead>
+  <tbody>${culmRows}</tbody></table>`;
   generarPDFBase("Indicadores Académicos · Producción Científica", contenido);
   toast("PDF indicadores generándose","ok");
 }
