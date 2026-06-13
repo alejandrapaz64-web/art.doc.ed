@@ -19,7 +19,7 @@
 body{font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--txt);display:flex;min-height:100vh;font-size:14px;overflow-x:hidden;}
 
 /* ═══ LOGIN ═══ */
-.lp{position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:16px;
+.lp{position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:16px;overflow-y:auto;-webkit-overflow-scrolling:touch;
   background:linear-gradient(145deg,#001F3D 0%,#002952 40%,#003865 72%,#004f8c 100%);}
 .lp-circle1{position:absolute;top:-120px;right:-120px;width:520px;height:520px;border-radius:50%;background:radial-gradient(circle,rgba(26,123,196,0.18) 0%,transparent 70%);pointer-events:none;z-index:0;}
 .lp-circle2{position:absolute;bottom:-100px;left:-80px;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(14,124,123,0.12) 0%,transparent 70%);pointer-events:none;z-index:0;}
@@ -30,7 +30,7 @@ body{font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;background:var(--b
 .lp-glow{display:none;}
 
 
-.l-card{position:relative;z-index:1;background:#fff;border-radius:20px;width:100%;max-width:450px;overflow:hidden;box-shadow:0 28px 72px rgba(0,8,40,0.38);}
+.l-card{position:relative;z-index:1;background:#fff;border-radius:20px;width:100%;max-width:450px;overflow:hidden;box-shadow:0 28px 72px rgba(0,8,40,0.38);margin:auto 0;}
 .l-head{display:flex;align-items:stretch;background:linear-gradient(135deg,#002952 0%,#003865 55%,#004f8c 100%);position:relative;overflow:hidden;min-height:86px;}
 .l-head::before{content:'';position:absolute;right:-40px;top:-40px;width:190px;height:190px;border-radius:50%;background:rgba(255,255,255,0.05);}
 .l-head::after{content:'';position:absolute;right:50px;bottom:-65px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,0.04);}
@@ -289,6 +289,15 @@ function asegurarXLSX(cb){
   s.onerror=function(){toast("No se pudo cargar la librería Excel. Verifique su conexión a internet.","err");};
   document.head.appendChild(s);
 }
+function xlsxDownload(wb,filename){
+  const wbout=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+  const blob=new Blob([wbout],{type:"application/octet-stream"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;a.download=filename;
+  document.body.appendChild(a);a.click();
+  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},500);
+}
 </script>
 </head>
 <body>
@@ -420,9 +429,9 @@ function asegurarXLSX(cb){
           <div>
             <div class="card">
               <div class="ch">
-                <div><div class="ct2">Estudiantes · Estado del requisito</div><div class="cs">Cumplimiento de 2 artículos ISI/Scopus Q1–Q2</div></div>
+                <div><div class="ct2" id="dashTablaTitulo">Estudiantes · Estado del requisito</div><div class="cs" id="dashTablaSub">Cumplimiento de 2 artículos ISI/Scopus Q1–Q2</div></div>
                 
-                <div style="margin-left:auto;display:flex;gap:7px;">
+                <div style="margin-left:auto;display:flex;gap:7px;" id="dashTablaAcciones">
                   <div class="sw"><span class="si">🔍</span><input type="text" placeholder="Buscar..." oninput="filtrarDashEst(this.value)"/></div>
                   <button class="btn bs bsm" onclick="exportExcelEstadoRequisito()">📊 Excel</button>
                   <button class="btn bs bsm" onclick="exportPDFEstadoRequisito()">📄 PDF</button>
@@ -914,6 +923,19 @@ function asegurarXLSX(cb){
   </div>
 </div>
 
+<div class="mov" id="modal-msgcoord">
+  <div class="modal">
+    <div class="mh"><h3>📨 Mensaje de la Coordinación</h3><button class="mc" onclick="cerrarModal('msgcoord')">✕</button></div>
+    <div class="mb">
+      <div style="font-size:.72rem;color:var(--txt3);margin-bottom:8px" id="msgcoordFecha"></div>
+      <div style="font-size:.85rem;color:var(--txt);white-space:pre-line;line-height:1.6" id="msgcoordTexto"></div>
+    </div>
+    <div class="mf">
+      <button class="btn bp" onclick="cerrarModal('msgcoord')">Entendido</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -1078,9 +1100,17 @@ function doLogin(){
   irA(primerNav,document.getElementById("nav-"+primerNav));
   renderAll();
   setLogos();
-  cargarDesdeSheets();
-  cargarArticulosDesdeSheets().then(()=>{renderArtsAdmin();renderMisArts();renderDash();});
-  cargarPonenciasDesdeSheets().then(()=>{try{renderPonencias();}catch(ex){}renderDash();renderDashPonencias();});
+  cargarDesdeSheets(true);
+  Promise.all([
+    cargarArticulosDesdeSheets(),
+    cargarPonenciasDesdeSheets()
+  ]).then(()=>{
+    renderArtsAdmin();
+    renderMisArts();
+    try{renderPonencias();}catch(ex){}
+    renderDashPonencias();
+    renderDash();
+  });
   setTimeout(()=>{
     reintentarSync();
     actualizarBannerSync(contarPendientes());
@@ -1254,6 +1284,11 @@ function renderDashEstudiante(){
       </div>
     </div>` : '<div class="kpi"><div class="kv">—</div><div class="kl">Sin datos</div></div>';
 
+  // Adaptar tabla "Estado del requisito" para vista de estudiante (oculta exportaciones masivas)
+  const dtt=document.getElementById("dashTablaTitulo");if(dtt)dtt.textContent="Mis artículos";
+  const dts=document.getElementById("dashTablaSub");if(dts)dts.textContent="Detalle de mis artículos registrados";
+  const dta=document.getElementById("dashTablaAcciones");if(dta)dta.style.display="none";
+
   // Progreso general
   const contenido = document.getElementById("dashTbody");
   const pgI = document.getElementById("dashPgI");
@@ -1298,6 +1333,9 @@ function renderDash(){
     renderDashEstudiante();return;
   }
   const bar=document.getElementById("dashExportBar");
+  const dtt=document.getElementById("dashTablaTitulo");if(dtt)dtt.textContent="Estudiantes · Estado del requisito";
+  const dts=document.getElementById("dashTablaSub");if(dts)dts.textContent="Cumplimiento de "+(ST.config&&ST.config.arts||2)+" artículos ISI/Scopus Q1–Q2";
+  const dta=document.getElementById("dashTablaAcciones");if(dta)dta.style.display="flex";
   if(bar)bar.innerHTML=`
     <button class="btn bs bsm" onclick="exportExcelEstudiantes()">📊 Excel estudiantes</button>
     <button class="btn bs bsm" onclick="exportPDFEstudiantes()">📄 PDF estudiantes</button>
@@ -1570,12 +1608,28 @@ function cargarAlertasCoordinacion(estId){
         const vals=[];let cur="",inQ=false;
         for(const c of line){if(c==='"')inQ=!inQ;else if(c===","&&!inQ){vals.push(cur.trim());cur="";}else cur+=c;}
         vals.push(cur.trim());return vals;
-      });
-      const extra=rows.filter(r=>r[idxMsg]).slice(-5).reverse().map(r=>`<div class="ai-wrap">
-        <div class="ai-ic ic-a">📨</div>
-        <div class="ai-t"><div class="ai-n">Mensaje de la Coordinación · ${r[idxFecha]||''}</div><div class="ai-s" style="white-space:pre-line">${(r[idxMsg]||'').replace(/<[^>]*>/g,'')}</div></div>
-      </div>`).join('');
-      if(extra) dashAl.innerHTML+=extra;
+      }).filter(r=>r[idxMsg]);
+      if(!rows.length)return;
+      const ultimo=rows[rows.length-1];
+      const fecha=ultimo[idxFecha]||"";
+      const mensaje=(ultimo[idxMsg]||"").replace(/<[^>]*>/g,"");
+      // Quitar bloque previo de mensaje de coordinación (evitar duplicados al re-renderizar)
+      const prev=dashAl.querySelector(".msgcoord-block");
+      if(prev) prev.remove();
+      const div=document.createElement("div");
+      div.className="ai-wrap msgcoord-block";
+      div.innerHTML=`<div class="ai-ic ic-a">📨</div>
+        <div class="ai-t"><div class="ai-n">Mensaje de la Coordinación · ${fecha}</div><div class="ai-s" style="white-space:pre-line">${mensaje}</div></div>`;
+      dashAl.appendChild(div);
+      // Mostrar popup solo una vez por mensaje (clave estable por fecha)
+      const seenKey="scitrack_msgcoord_seen_"+estId;
+      const lastSeen=localStorage.getItem(seenKey)||"";
+      if(fecha&&fecha!==lastSeen){
+        document.getElementById("msgcoordFecha").textContent=fecha;
+        document.getElementById("msgcoordTexto").textContent=mensaje;
+        abrirModal("msgcoord");
+        localStorage.setItem(seenKey,fecha);
+      }
     }).catch(()=>{});
 }
 // ── ESTUDIANTES ──
@@ -1731,13 +1785,18 @@ function renderArts(){
   }
   renderArtsAdmin();
 }
+function findArtIdx(key){
+  return ST.articulos.findIndex(a=>artArchKey(a)===key);
+}
 function renderArtsAdmin(){
   const list=document.getElementById("artsListAdmin");
   if(!list)return;
+  // Refrescar artsFiltAdmin para que apunte siempre a los objetos actuales de ST.articulos
+  artsFiltAdmin=artsFiltAdmin.map(a=>ST.articulos.find(x=>artArchKey(x)===artArchKey(a))||a).filter(Boolean);
   const esCoord=["coordinadora","direccion"].includes(rolActual);
   const esDir=rolActual==="director";
   list.innerHTML=artsFiltAdmin.length?artsFiltAdmin.map((a,i)=>{
-    const ri=ST.articulos.indexOf(a);
+    const key=artArchKey(a);
     const apCSS=a.aprobado==="aprobado"?"bve":a.aprobado==="rechazado"?"bro":"bam";
     const apLbl=a.aprobado==="aprobado"?"✅ Aprobado":a.aprobado==="rechazado"?"❌ Rechazado":"⏳ Pendiente revisión";
     return`<div class="acard" style="border-left:4px solid ${a.aprobado==="aprobado"?"var(--verde)":a.aprobado==="rechazado"?"var(--rojo)":"#D97706"}">
@@ -1761,20 +1820,24 @@ function renderArtsAdmin(){
       ${a.link?`<div style="font-size:.7rem;margin-bottom:4px">🌐 <a href="${a.link}" target="_blank" style="color:var(--azulm);word-break:break-all">${a.link}</a></div>`:""}
       ${a.obs_director?`<div style="font-size:.71rem;color:var(--ambar);background:var(--ambarb);border-radius:6px;padding:5px 9px;margin-bottom:6px">💬 Director: ${a.obs_director}</div>`:""}
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
-        ${loadArtArch(artArchKey(a))&&loadArtArch(artArchKey(a)).adj1b64?`<button class="btn bs bsm" onclick="verAdjArt('${artArchKey(a)}',1)">📄 Ver adjunto 1</button>`:""}
-        ${loadArtArch(artArchKey(a))&&loadArtArch(artArchKey(a)).adj2b64?`<button class="btn bs bsm" onclick="verAdjArt('${artArchKey(a)}',2)">📄 Ver adjunto 2</button>`:""}
+        ${loadArtArch(key)&&loadArtArch(key).adj1b64?`<button class="btn bs bsm" onclick="verAdjArt('${key}',1)">📄 Ver adjunto 1</button>`:""}
+        ${loadArtArch(key)&&loadArtArch(key).adj2b64?`<button class="btn bs bsm" onclick="verAdjArt('${key}',2)">📄 Ver adjunto 2</button>`:""}
         ${(esCoord||esDir)&&a.aprobado!=="aprobado"?`
-          <button class="btn bsm" style="background:var(--verdeb);color:var(--verde);border:1px solid #A3C97C" onclick="validarArt(${ri},'aprobado')">✅ Aprobar</button>
-          <button class="btn bsm" style="background:var(--rojob);color:var(--rojo);border:1px solid #FCA5A5" onclick="abrirRechazar(${ri})">❌ Rechazar</button>
+          <button class="btn bsm" style="background:var(--verdeb);color:var(--verde);border:1px solid #A3C97C" onclick="validarArtKey('${key}','aprobado')">✅ Aprobar</button>
+          <button class="btn bsm" style="background:var(--rojob);color:var(--rojo);border:1px solid #FCA5A5" onclick="abrirRechazarKey('${key}')">❌ Rechazar</button>
         `:(esCoord||esDir)&&a.aprobado==="aprobado"?`
           <span style="font-size:.71rem;color:var(--verde);font-weight:600">✅ Validado · no requiere nueva aprobación</span>
-          <button class="btn bsm" style="background:var(--rojob);color:var(--rojo);border:1px solid #FCA5A5" onclick="abrirRechazar(${ri})">↩️ Revertir</button>
+          <button class="btn bsm" style="background:var(--rojob);color:var(--rojo);border:1px solid #FCA5A5" onclick="abrirRechazarKey('${key}')">↩️ Revertir</button>
         `:""}
-        <button class="btn bs bsm" onclick="editarArt(${ri})">✏️ Editar</button>
-        ${esCoord?`<button class="btn bd bsm" onclick="eliminarArt(${ri})">🗑️</button>`:""}
+        <button class="btn bs bsm" onclick="editarArtKey('${key}')">✏️ Editar</button>
+        ${esCoord?`<button class="btn bd bsm" onclick="eliminarArtKey('${key}')">🗑️</button>`:""}
       </div>
     </div>`;}).join(""):`<p style="color:var(--txt3);font-size:.8rem;padding:10px 0">No hay artículos registrados.</p>`;
 }
+function editarArtKey(key){const i=findArtIdx(key);if(i<0){toast("Artículo no encontrado, recargando lista…","err");renderArts();return;}editarArt(i);}
+function eliminarArtKey(key){const i=findArtIdx(key);if(i<0){toast("Artículo no encontrado, recargando lista…","err");renderArts();return;}eliminarArt(i);}
+function validarArtKey(key,decision){const i=findArtIdx(key);if(i<0){toast("Artículo no encontrado, recargando lista…","err");renderArts();return;}validarArt(i,decision);}
+function abrirRechazarKey(key){const i=findArtIdx(key);if(i<0){toast("Artículo no encontrado, recargando lista…","err");renderArts();return;}abrirRechazar(i);}
 
 function editarArt(i){
   const a=ST.articulos[i];
@@ -1992,11 +2055,13 @@ function renderMisArts(){
         <span class="b ${AEC[a.estado]||"bgr"}">${AEN[a.estado]||a.estado}</span>
         <span style="font-size:.7rem;font-style:italic;color:var(--txt2)">${a.revista||""}</span>
       </div>
+      ${a.doi?`<div style="font-size:.7rem;color:var(--azulm);margin-top:3px">🔗 DOI: ${a.doi}</div>`:""}
+      ${a.link?`<div style="font-size:.7rem;margin-top:3px">🌐 <a href="${a.link}" target="_blank" style="color:var(--azulm);word-break:break-all">${a.link}</a></div>`:""}
       ${a.aprobado==="aprobado"?`<div style="background:var(--verdeb);border-radius:10px;padding:10px 14px;margin-top:8px"><div style="font-weight:700;font-size:.8rem;color:var(--verde)">✅ Artículo aprobado por el director · Obligación cumplida</div></div>`
         :a.aprobado==="rechazado"?`<div style="background:var(--rojob);border-radius:10px;padding:10px 14px;margin-top:8px"><div style="font-weight:700;font-size:.8rem;color:var(--rojo)">❌ Artículo rechazado · Revise observaciones</div>${a.obs_director?`<div style="font-size:.72rem;color:var(--rojo);margin-top:4px">Observación: ${a.obs_director}</div>`:""}</div>`
         :`<div style="background:var(--ambarb);border-radius:10px;padding:10px 14px;margin-top:8px"><div style="font-weight:700;font-size:.8rem;color:var(--ambar)">⏳ Pendiente de verificación por la Coordinación</div></div>`}
       <div style="display:flex;gap:6px;margin-top:8px;">
-        <button class="btn bs bsm" onclick="editarArt(${ST.articulos.indexOf(a)})">✏️ Actualizar estado</button>
+        <button class="btn bs bsm" onclick="editarArtKey('${artArchKey(a)}')">✏️ Actualizar estado</button>
       </div>
     </div>`).join(""):`<p style="color:var(--txt3);font-size:.8rem">No tiene artículos registrados. Haga clic en "+ Registrar artículo".</p>`;
 }
@@ -2179,7 +2244,20 @@ function renderIndicadores(){
           <span class="b bte" style="font-size:.67rem">${label}</span>
           <span style="font-weight:700;font-size:.72rem;color:var(--azul)">${nI}</span>
         </div>`;}).join("")}
-    </div>`;
+    </div>`+
+    (()=>{
+      const req2=ST.config&&ST.config.arts||2;
+      const culminados=ST.estudiantes.filter(e=>{
+        const artsAprob=(artTotal).filter(a=>(String(a.autorCodigo)===String(e.id)||String(a.autorId)===String(e.id))&&a.aprobado==="aprobado").length;
+        const pon=ponTotal.find(p=>String(p.estudianteId)===String(e.id));
+        return artsAprob>=req2&&pon&&pon.estado==="verificado";
+      });
+      return `<div style="margin-top:16px;border-top:1px solid var(--borde);padding-top:12px">
+        <div style="font-size:.72rem;font-weight:700;color:var(--verde);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">✅ Obligaciones académicas culminadas (${req2} artículos aprobados + ponencia verificada)</div>
+        ${culminados.length?`<div style="font-size:.74rem;color:var(--txt2);line-height:1.9">${culminados.map(e=>`<div>🎓 <strong>${e.nombre.split(",")[0]}</strong> · ${normLineaG(e.linea)||"—"} · Cohorte ${e.cohorte||"—"}</div>`).join("")}</div>`
+          :`<div style="font-size:.74rem;color:var(--txt3)">Ningún estudiante ha culminado la totalidad de sus obligaciones académicas todavía.</div>`}
+      </div>`;
+    })();
   }
 }
 
@@ -2187,13 +2265,24 @@ function renderIndicadores(){
 // ── ALERTAS ──
 function generarAlertas(){
   const al=[];
+  const req=ST.config&&ST.config.arts||2;
   ST.estudiantes.forEach(e=>{
-    const artsTotal=(ST.articulos||[]).filter(a=>String(a.autorCodigo)===String(e.id)||String(a.autorId)===String(e.id)).length;
     const artsAprob=(ST.articulos||[]).filter(a=>(String(a.autorCodigo)===String(e.id)||String(a.autorId)===String(e.id))&&a.aprobado==="aprobado").length;
-    const tienePonencia=(ST.ponencias||[]).some(p=>String(p.estudianteId)===String(e.id));
-    if(artsTotal===0&&!tienePonencia) al.push({tipo:"critico",nombre:e.nombre.split(",")[0],msg:"Sin artículos ni ponencia registrados",nivel:"critico"});
-    else if(e.estado==="critico") al.push({tipo:"critico",nombre:e.nombre.split(",")[0],msg:"Riesgo de no graduación · Año 3+ sin aceptación",nivel:"critico"});
-    else if(e.estado==="progreso"&&artsAprob<2) al.push({tipo:"ambar",nombre:e.nombre.split(",")[0],msg:"En progreso · Faltan "+(2-artsAprob)+" artículo(s)",nivel:"ambar"});
+    const pon=(ST.ponencias||[]).find(p=>String(p.estudianteId)===String(e.id));
+    const ponVer=pon&&pon.estado==="verificado";
+    const tieneAlgo=artsAprob>0||!!pon;
+    const completo=artsAprob>=req&&ponVer;
+    if(completo) return; // sin alerta, cumplió todo
+    if(!tieneAlgo){
+      al.push({tipo:"critico",nombre:e.nombre.split(",")[0],msg:"Sin artículos ni ponencia registrados",nivel:"critico"});
+    } else if(e.estado==="critico"){
+      al.push({tipo:"critico",nombre:e.nombre.split(",")[0],msg:"Riesgo de no graduación · Año 3+ sin aceptación",nivel:"critico"});
+    } else {
+      const faltantes=[];
+      if(artsAprob<req) faltantes.push((req-artsAprob)+" artículo(s) aprobado(s)");
+      if(!ponVer) faltantes.push(pon?(pon.estado==="rechazado"?"reenvío de ponencia (rechazada)":"verificación de ponencia"):"ponencia");
+      al.push({tipo:"ambar",nombre:e.nombre.split(",")[0],msg:"Avance parcial · Pendiente: "+faltantes.join(" y "),nivel:"ambar"});
+    }
   });
   return al;
 }
@@ -2582,7 +2671,7 @@ async function cargarPonenciasDesdeSheets(){
   }
 }
 
-async function cargarDesdeSheets(){
+async function cargarDesdeSheets(skipRenderDash){
   if(_bloqueoCarga)return;
   try{
     const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
@@ -2621,7 +2710,7 @@ async function cargarDesdeSheets(){
       }
       renderAll();
       dashFilt=ST.estudiantes.slice();
-      renderDash();
+      if(!skipRenderDash) renderDash();
       actualizarBadgesMenu();
       console.log("✅ "+cargados.length+" estudiantes cargados desde Sheets");
     }
@@ -2630,7 +2719,7 @@ async function cargarDesdeSheets(){
   }
 }
 function _syncCicloCompleto(){
-  cargarDesdeSheets(true);
+  cargarDesdeSheets();
   cargarArticulosDesdeSheets().then(()=>{renderArtsAdmin();renderMisArts();renderDash();});
   cargarPonenciasDesdeSheets().then(()=>{try{renderPonencias();}catch(ex){}renderDash();renderDashPonencias();});
 }
@@ -2884,7 +2973,7 @@ function exportExcelEstudiantes(){
   ws2["!merges"]=[{s:{r:0,c:0},e:{r:0,c:8}}];
   XLSX.utils.book_append_sheet(wb,"Artículos",ws2);
 
-  XLSX.writeFile(wb,"Sistema_Doctoral_Estudiantes_"+new Date().toISOString().slice(0,10)+".xlsx");
+  xlsxDownload(wb,"Sistema_Doctoral_Estudiantes_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("✅ Excel descargado correctamente","ok");
   }catch(err){
     console.error("exportExcelEstudiantes error:",err);
@@ -2911,7 +3000,7 @@ function exportExcelArticulos(){
   ws["!cols"]=[{wch:50},{wch:28},{wch:14},{wch:28},{wch:8},{wch:12},{wch:18},{wch:12},{wch:35},{wch:25},{wch:12}];
   ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:10}},{s:{r:1,c:0},e:{r:1,c:10}}];
   XLSX.utils.book_append_sheet(wb,"Artículos",ws);
-  XLSX.writeFile(wb,"Sistema_Doctoral_Articulos_"+new Date().toISOString().slice(0,10)+".xlsx");
+  xlsxDownload(wb,"Sistema_Doctoral_Articulos_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("✅ Excel descargado correctamente","ok");
 }
 
@@ -2932,7 +3021,7 @@ function exportExcelRepositorio(){
   ws["!cols"]=[{wch:50},{wch:28},{wch:14},{wch:28},{wch:8},{wch:12},{wch:14},{wch:25},{wch:50}];
   ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:8}},{s:{r:1,c:0},e:{r:1,c:8}}];
   XLSX.utils.book_append_sheet(wb,"Repositorio",ws);
-  XLSX.writeFile(wb,"Repositorio_Publicaciones_"+new Date().toISOString().slice(0,10)+".xlsx");
+  xlsxDownload(wb,"Repositorio_Publicaciones_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("✅ Excel repositorio descargado","ok");
 }
 
@@ -2978,7 +3067,7 @@ function exportExcelAlertas(){
   ws["!cols"]=[{wch:30},{wch:16},{wch:12},{wch:60}];
   ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:1,c:0},e:{r:1,c:3}}];
   XLSX.utils.book_append_sheet(wb,"Alertas",ws);
-  XLSX.writeFile(wb,"Alertas_Sistema_Doctoral_"+new Date().toISOString().slice(0,10)+".xlsx");
+  xlsxDownload(wb,"Alertas_Sistema_Doctoral_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("✅ Excel alertas descargado","ok");
 }
 
@@ -3042,7 +3131,7 @@ function exportExcelIndicadores(){
   const ws=XLSX.utils.aoa_to_sheet(data);
   ws["!cols"]=[{wch:32},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
   XLSX.utils.book_append_sheet(wb,"Indicadores",ws);
-  XLSX.writeFile(wb,"Sistema_Doctoral_Indicadores_"+new Date().toISOString().slice(0,10)+".xlsx");
+  xlsxDownload(wb,"Sistema_Doctoral_Indicadores_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("✅ Excel descargado correctamente","ok");
 }
 
@@ -3070,7 +3159,7 @@ function exportExcelEstadoRequisito(){
   ws["!cols"]=[{wch:32},{wch:10},{wch:32},{wch:16},{wch:12},{wch:16}];
   ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:5}}];
   XLSX.utils.book_append_sheet(wb,"Estado del Requisito",ws);
-  XLSX.writeFile(wb,"Estado_Requisito_"+new Date().toISOString().slice(0,10)+".xlsx");
+  xlsxDownload(wb,"Estado_Requisito_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("✅ Excel descargado correctamente","ok");
 }
 function exportPDFEstadoRequisito(){
