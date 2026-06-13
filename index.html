@@ -19,7 +19,7 @@
 body{font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--txt);display:flex;min-height:100vh;font-size:14px;overflow-x:hidden;}
 
 /* ═══ LOGIN ═══ */
-.lp{position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:16px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+.lp{position:relative;min-height:100vh;width:100%;z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:16px;overflow-x:hidden;box-sizing:border-box;
   background:linear-gradient(145deg,#001F3D 0%,#002952 40%,#003865 72%,#004f8c 100%);}
 .lp-circle1{position:absolute;top:-120px;right:-120px;width:520px;height:520px;border-radius:50%;background:radial-gradient(circle,rgba(26,123,196,0.18) 0%,transparent 70%);pointer-events:none;z-index:0;}
 .lp-circle2{position:absolute;bottom:-100px;left:-80px;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(14,124,123,0.12) 0%,transparent 70%);pointer-events:none;z-index:0;}
@@ -1254,7 +1254,8 @@ function renderDashEstudiante(){
   const e = estSesion || ST.estudiantes[0];
   const L_FULL={L1:"Pedagogía e Infancia",L2:"Institución Educativa, Currículo y Gestión",L3:"Integración Educativa de las TIC"};
   const artsE = e ? ST.articulos.filter(a=>a.autorId===e.id||a.autorNombre===e.nombre||a.autorCodigo===e.id) : [];
-  const artsVal = e ? (e.arts||0) : 0;
+  const artsVal = e ? artsE.filter(a=>a.aprobado==="aprobado").length : 0;
+  const reqArts = (ST.config&&ST.config.arts)||2;
   const pct = Math.min(100, Math.round(artsVal/2*100));
   const pond = e && ST.ponencias ? ST.ponencias.find(p=>p.estudianteId===e.id) : null;
 
@@ -1272,8 +1273,8 @@ function renderDashEstudiante(){
             <button class="btn bp bsm" onclick="exportPDFFichaPropia()">⬇ Descargar mi ficha (PDF)</button>
             ${pond&&pond.estado==='verificado'?`<button class="btn bs bsm" onclick="generarCertificadoPonenciaProppia()">⬇ Certificado de ponencia</button>`:''}
           </div>
-          <div class="kpi" style="min-width:100px;border-left-color:${artsVal>=2?'var(--verde)':'var(--rojo)'}">
-            <div class="kv">${artsVal}/2</div><div class="kl">Artículos válidos</div>
+          <div class="kpi" style="min-width:100px;border-left-color:${artsVal>=reqArts?'var(--verde)':'var(--rojo)'}">
+            <div class="kv">${artsVal}/${reqArts}</div><div class="kl">Artículos válidos</div>
           </div>
           <div class="kpi" style="min-width:100px;border-left-color:${pond&&pond.estado==='verificado'?'var(--verde)':pond&&pond.estado==='rechazado'?'var(--rojo)':pond?'#D97706':'var(--rojo)'}">
             <div class="kv" style="font-size:1.2rem">${pond&&pond.estado==='verificado'?'✅':pond&&pond.estado==='rechazado'?'❌':pond?'⏳':'⭕'}</div>
@@ -1307,7 +1308,7 @@ function renderDashEstudiante(){
   const dashAl = document.getElementById("dashAlertas");
   if(dashAl){
     const msgs = [];
-    if(artsVal<2) msgs.push({tipo:'critico',msg:'Faltan '+(2-artsVal)+' artículo(s) válidos para cumplir el requisito'});
+    if(artsVal<reqArts) msgs.push({tipo:'critico',msg:'Faltan '+(reqArts-artsVal)+' artículo(s) válidos para cumplir el requisito'});
     const artPend=artsE.filter(a=>!a.aprobado||a.aprobado==='pendiente');
     if(artPend.length>0) msgs.push({tipo:'ambar',msg:artPend.length+' artículo(s) en verificación · La coordinación los revisará pronto'});
     if(!pond) msgs.push({tipo:'critico',msg:'No ha subido los soportes de su ponencia'});
@@ -1618,8 +1619,15 @@ function cargarAlertasCoordinacion(estId){
       if(prev) prev.remove();
       const div=document.createElement("div");
       div.className="ai-wrap msgcoord-block";
+      div.style.cursor="pointer";
+      div.title="Clic para ver el mensaje completo";
       div.innerHTML=`<div class="ai-ic ic-a">📨</div>
         <div class="ai-t"><div class="ai-n">Mensaje de la Coordinación · ${fecha}</div><div class="ai-s" style="white-space:pre-line">${mensaje}</div></div>`;
+      div.onclick=function(){
+        document.getElementById("msgcoordFecha").textContent=fecha;
+        document.getElementById("msgcoordTexto").textContent=mensaje;
+        abrirModal("msgcoord");
+      };
       dashAl.appendChild(div);
       // Mostrar popup solo una vez por mensaje (clave estable por fecha)
       const seenKey="scitrack_msgcoord_seen_"+estId;
@@ -1816,7 +1824,7 @@ function renderArtsAdmin(){
         <span style="font-weight:600;color:var(--azul)">${a.autorNombre||"Sin asignar"}</span>
         ${a.autorCodigo?`<span style="color:var(--txt3);font-family:monospace;font-size:.68rem">· ${a.autorCodigo}</span>`:""}
       </div>
-      ${a.doi?`<div style="font-size:.7rem;color:var(--azulm);margin-bottom:4px">🔗 DOI: ${a.doi}</div>`:""}
+      ${a.doi&&!/^https?:\/\//i.test(a.doi)?`<div style="font-size:.7rem;color:var(--azulm);margin-bottom:4px">🔗 DOI: ${a.doi}</div>`:""}
       ${a.link?`<div style="font-size:.7rem;margin-bottom:4px">🌐 <a href="${a.link}" target="_blank" style="color:var(--azulm);word-break:break-all">${a.link}</a></div>`:""}
       ${a.obs_director?`<div style="font-size:.71rem;color:var(--ambar);background:var(--ambarb);border-radius:6px;padding:5px 9px;margin-bottom:6px">💬 Director: ${a.obs_director}</div>`:""}
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
@@ -2055,7 +2063,7 @@ function renderMisArts(){
         <span class="b ${AEC[a.estado]||"bgr"}">${AEN[a.estado]||a.estado}</span>
         <span style="font-size:.7rem;font-style:italic;color:var(--txt2)">${a.revista||""}</span>
       </div>
-      ${a.doi?`<div style="font-size:.7rem;color:var(--azulm);margin-top:3px">🔗 DOI: ${a.doi}</div>`:""}
+      ${a.doi&&!/^https?:\/\//i.test(a.doi)?`<div style="font-size:.7rem;color:var(--azulm);margin-top:3px">🔗 DOI: ${a.doi}</div>`:""}
       ${a.link?`<div style="font-size:.7rem;margin-top:3px">🌐 <a href="${a.link}" target="_blank" style="color:var(--azulm);word-break:break-all">${a.link}</a></div>`:""}
       ${a.aprobado==="aprobado"?`<div style="background:var(--verdeb);border-radius:10px;padding:10px 14px;margin-top:8px"><div style="font-weight:700;font-size:.8rem;color:var(--verde)">✅ Artículo aprobado por el director · Obligación cumplida</div></div>`
         :a.aprobado==="rechazado"?`<div style="background:var(--rojob);border-radius:10px;padding:10px 14px;margin-top:8px"><div style="font-weight:700;font-size:.8rem;color:var(--rojo)">❌ Artículo rechazado · Revise observaciones</div>${a.obs_director?`<div style="font-size:.72rem;color:var(--rojo);margin-top:4px">Observación: ${a.obs_director}</div>`:""}</div>`
@@ -2150,7 +2158,7 @@ function filtrarRepo(q){
         ${a.fecha?`<span style="font-size:.66rem;color:var(--txt3)">${a.fecha}</span>`:""}
       </div>
       <div style="font-size:.72rem;color:var(--txt2);margin-bottom:4px">👤 ${a.autorNombre||"—"}</div>
-      ${a.doi?`<div style="font-size:.7rem;color:var(--azulm);margin-top:3px">🔗 DOI: <a href="https://doi.org/${a.doi}" target="_blank" style="color:var(--azulm)">${a.doi}</a></div>`:""}
+      ${a.doi&&!/^https?:\/\//i.test(a.doi)?`<div style="font-size:.7rem;color:var(--txt2);margin-top:3px">🔗 DOI: ${a.doi}</div>`:""}
       ${a.link?`<div style="font-size:.7rem;margin-top:3px">🌐 <a href="${a.link}" target="_blank" style="color:var(--azulm);word-break:break-all">${a.link}</a></div>`:""}
       ${a.resumen?`<div style="font-size:.72rem;color:var(--txt2);margin-top:6px;line-height:1.5">${a.resumen}</div>`:""}
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
@@ -2952,7 +2960,7 @@ function exportExcelEstudiantes(){
   ws["!cols"]=[{wch:30},{wch:14},{wch:10},{wch:28},{wch:22},{wch:45},{wch:14},{wch:10},{wch:30}];
   // Merge título
   ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:8}}];
-  XLSX.utils.book_append_sheet(wb,"Estudiantes",ws);
+  XLSX.utils.book_append_sheet(wb,ws,"Estudiantes");
 
   // Hoja 2: Artículos por estudiante
   const dataArts=[
@@ -2971,7 +2979,7 @@ function exportExcelEstudiantes(){
   const ws2=XLSX.utils.aoa_to_sheet(dataArts);
   ws2["!cols"]=[{wch:28},{wch:14},{wch:50},{wch:28},{wch:8},{wch:12},{wch:18},{wch:14},{wch:25}];
   ws2["!merges"]=[{s:{r:0,c:0},e:{r:0,c:8}}];
-  XLSX.utils.book_append_sheet(wb,"Artículos",ws2);
+  XLSX.utils.book_append_sheet(wb,ws2,"Artículos");
 
   xlsxDownload(wb,"Sistema_Doctoral_Estudiantes_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("✅ Excel descargado correctamente","ok");
@@ -2999,7 +3007,7 @@ function exportExcelArticulos(){
   const ws=XLSX.utils.aoa_to_sheet(data);
   ws["!cols"]=[{wch:50},{wch:28},{wch:14},{wch:28},{wch:8},{wch:12},{wch:18},{wch:12},{wch:35},{wch:25},{wch:12}];
   ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:10}},{s:{r:1,c:0},e:{r:1,c:10}}];
-  XLSX.utils.book_append_sheet(wb,"Artículos",ws);
+  XLSX.utils.book_append_sheet(wb,ws,"Artículos");
   xlsxDownload(wb,"Sistema_Doctoral_Articulos_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("✅ Excel descargado correctamente","ok");
 }
@@ -3020,7 +3028,7 @@ function exportExcelRepositorio(){
   const ws=XLSX.utils.aoa_to_sheet(data);
   ws["!cols"]=[{wch:50},{wch:28},{wch:14},{wch:28},{wch:8},{wch:12},{wch:14},{wch:25},{wch:50}];
   ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:8}},{s:{r:1,c:0},e:{r:1,c:8}}];
-  XLSX.utils.book_append_sheet(wb,"Repositorio",ws);
+  XLSX.utils.book_append_sheet(wb,ws,"Repositorio");
   xlsxDownload(wb,"Repositorio_Publicaciones_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("✅ Excel repositorio descargado","ok");
 }
@@ -3066,7 +3074,7 @@ function exportExcelAlertas(){
   const ws=XLSX.utils.aoa_to_sheet(data);
   ws["!cols"]=[{wch:30},{wch:16},{wch:12},{wch:60}];
   ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:1,c:0},e:{r:1,c:3}}];
-  XLSX.utils.book_append_sheet(wb,"Alertas",ws);
+  XLSX.utils.book_append_sheet(wb,ws,"Alertas");
   xlsxDownload(wb,"Alertas_Sistema_Doctoral_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("✅ Excel alertas descargado","ok");
 }
@@ -3130,7 +3138,7 @@ function exportExcelIndicadores(){
   });
   const ws=XLSX.utils.aoa_to_sheet(data);
   ws["!cols"]=[{wch:32},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
-  XLSX.utils.book_append_sheet(wb,"Indicadores",ws);
+  XLSX.utils.book_append_sheet(wb,ws,"Indicadores");
   xlsxDownload(wb,"Sistema_Doctoral_Indicadores_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("✅ Excel descargado correctamente","ok");
 }
@@ -3158,7 +3166,7 @@ function exportExcelEstadoRequisito(){
   const ws=XLSX.utils.aoa_to_sheet(data);
   ws["!cols"]=[{wch:32},{wch:10},{wch:32},{wch:16},{wch:12},{wch:16}];
   ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:5}}];
-  XLSX.utils.book_append_sheet(wb,"Estado del Requisito",ws);
+  XLSX.utils.book_append_sheet(wb,ws,"Estado del Requisito");
   xlsxDownload(wb,"Estado_Requisito_"+new Date().toISOString().slice(0,10)+".xlsx");
   toast("✅ Excel descargado correctamente","ok");
 }
