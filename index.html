@@ -1826,8 +1826,7 @@ function renderArtsAdmin(){
         <span style="font-weight:600;color:var(--azul)">${a.autorNombre||"Sin asignar"}</span>
         ${a.autorCodigo?`<span style="color:var(--txt3);font-family:monospace;font-size:.68rem">· ${a.autorCodigo}</span>`:""}
       </div>
-      ${a.link?`<div style="font-size:.7rem;margin-bottom:4px">🔗 <a href="${linkHref(a.link)}" target="_blank" style="color:var(--azulm);word-break:break-all;font-weight:600">Ver publicación: ${a.link}</a></div>`:(a.doi&&!/^https?:\/\//i.test(a.doi)?`<div style="font-size:.7rem;color:var(--azulm);margin-bottom:4px">🔗 DOI: ${a.doi}</div>`:"")}
-      ${a.link&&a.doi&&!/^https?:\/\//i.test(a.doi)?`<div style="font-size:.68rem;color:var(--txt3);margin-bottom:4px">DOI: ${a.doi}</div>`:""}
+      ${a.link?`<div style="font-size:.7rem;margin-bottom:4px">🔗 <a href="${linkHref(a.link)}" target="_blank" style="color:var(--azulm);word-break:break-all;font-weight:600">Ver publicación: ${a.link}</a></div>`:""}
       ${a.obs_director?`<div style="font-size:.71rem;color:var(--ambar);background:var(--ambarb);border-radius:6px;padding:5px 9px;margin-bottom:6px">💬 Director: ${a.obs_director}</div>`:""}
       <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
         ${a.adj1_url?`<button class="btn bs bsm" onclick="verAdjArt('${a.adj1_url}')">📄 Ver adjunto 1</button>`:""}
@@ -1987,22 +1986,10 @@ function guardarArt(){
   if(!esNuevo)ST.articulos[parseInt(idx)]=obj;
   else ST.articulos.unshift(obj);
   saveSt(ST);
-  // Guardar adjuntos (Google Drive vía Apps Script)
+  // Guardar adjuntos (Google Drive vía Apps Script) — se envía DESPUÉS del sync del artículo
+  // para asegurar que la fila ya exista en Sheets cuando se busque por título+código_autor.
   const adj1File=(document.getElementById("artAdj1")||{}).files&&document.getElementById("artAdj1").files[0];
   const adj2File=(document.getElementById("artAdj2")||{}).files&&document.getElementById("artAdj2").files[0];
-  if(adj1File||adj2File){
-    const url2=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
-    const readF=(file)=>new Promise(res=>{if(!file){res(null);return;}const r=new FileReader();r.onload=ev=>res({b64:ev.target.result.split(",")[1],mime:file.type,nombre:file.name});r.onerror=()=>res(null);r.readAsDataURL(file);});
-    Promise.all([readF(adj1File),readF(adj2File)]).then(([a1,a2])=>{
-      if(!url2)return;
-      const payload={action:"subir_adjunto_articulo",titulo:obj.titulo,codigo_autor:obj.autorCodigo||""};
-      if(a1){payload.adj1_b64=a1.b64;payload.adj1_mime=a1.mime;payload.adj1_nombre=a1.nombre;}
-      if(a2){payload.adj2_b64=a2.b64;payload.adj2_mime=a2.mime;payload.adj2_nombre=a2.nombre;}
-      fetch(url2,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)})
-        .then(()=>{toast("📎 Adjunto(s) subido(s) correctamente","ok");setTimeout(()=>{cargarArticulosDesdeSheets().then(()=>{renderArtsAdmin();renderMisArts();});},2000);})
-        .catch(()=>{toast("Error al subir adjunto(s)","err");});
-    });
-  }
   // Sync al GAS
   const url=localStorage.getItem(SCRIPT_URL_KEY)||SCRIPT_URL_HARDCODED;
   if(url){
@@ -2037,6 +2024,23 @@ function guardarArt(){
       document.head.appendChild(sc);
       setTimeout(()=>{try{document.head.removeChild(sc);}catch(e){}},5000);
     }
+  }
+  // Subir adjuntos a Drive (después del sync, con espera para que la fila exista en Sheets)
+  if((adj1File||adj2File)&&url){
+    const readF=(file)=>new Promise(res=>{if(!file){res(null);return;}const r=new FileReader();r.onload=ev=>res({b64:ev.target.result.split(",")[1],mime:file.type,nombre:file.name});r.onerror=()=>res(null);r.readAsDataURL(file);});
+    Promise.all([readF(adj1File),readF(adj2File)]).then(([a1,a2])=>{
+      const payload={action:"subir_adjunto_articulo",titulo:obj.titulo,codigo_autor:obj.autorCodigo||""};
+      if(a1){payload.adj1_b64=a1.b64;payload.adj1_mime=a1.mime;payload.adj1_nombre=a1.nombre;}
+      if(a2){payload.adj2_b64=a2.b64;payload.adj2_mime=a2.mime;payload.adj2_nombre=a2.nombre;}
+      setTimeout(()=>{
+        fetch(url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)})
+          .then(r=>r.json()).then(data=>{
+            if(data&&data.ok){toast("📎 Adjunto(s) subido(s) correctamente","ok");setTimeout(()=>{cargarArticulosDesdeSheets().then(()=>{renderArtsAdmin();renderMisArts();});},2000);}
+            else toast("⚠️ No se pudo subir el adjunto: "+((data&&data.error)||"error desconocido")+". Intente editar el artículo y volver a adjuntarlo.","err");
+          })
+          .catch(()=>{toast("Error al subir adjunto(s)","err");});
+      },esNuevo?3000:1000);
+    });
   }
   cerrarModal("articuloForm");renderArtsAdmin();renderMisArts();
   // Limpiar adjuntos del form
@@ -2079,8 +2083,7 @@ function renderMisArts(){
         <span class="b ${AEC[a.estado]||"bgr"}">${AEN[a.estado]||a.estado}</span>
         <span style="font-size:.7rem;font-style:italic;color:var(--txt2)">${a.revista||""}</span>
       </div>
-      ${a.link?`<div style="font-size:.7rem;margin-top:3px">🔗 <a href="${linkHref(a.link)}" target="_blank" style="color:var(--azulm);word-break:break-all;font-weight:600">Ver publicación: ${a.link}</a></div>`:(a.doi&&!/^https?:\/\//i.test(a.doi)?`<div style="font-size:.7rem;color:var(--azulm);margin-top:3px">🔗 DOI: ${a.doi}</div>`:"")}
-      ${a.link&&a.doi&&!/^https?:\/\//i.test(a.doi)?`<div style="font-size:.68rem;color:var(--txt3);margin-top:3px">DOI: ${a.doi}</div>`:""}
+      ${a.link?`<div style="font-size:.7rem;margin-top:3px">🔗 <a href="${linkHref(a.link)}" target="_blank" style="color:var(--azulm);word-break:break-all;font-weight:600">Ver publicación: ${a.link}</a></div>`:""}
       ${a.aprobado==="aprobado"?`<div style="background:var(--verdeb);border-radius:10px;padding:10px 14px;margin-top:8px"><div style="font-weight:700;font-size:.8rem;color:var(--verde)">✅ Artículo aprobado por el director · Obligación cumplida</div></div>`
         :a.aprobado==="rechazado"?`<div style="background:var(--rojob);border-radius:10px;padding:10px 14px;margin-top:8px"><div style="font-weight:700;font-size:.8rem;color:var(--rojo)">❌ Artículo rechazado · Revise observaciones</div>${a.obs_director?`<div style="font-size:.72rem;color:var(--rojo);margin-top:4px">Observación: ${a.obs_director}</div>`:""}</div>`
         :`<div style="background:var(--ambarb);border-radius:10px;padding:10px 14px;margin-top:8px"><div style="font-weight:700;font-size:.8rem;color:var(--ambar)">⏳ Pendiente de verificación por la Coordinación</div></div>`}
@@ -2178,8 +2181,7 @@ function filtrarRepo(q){
         ${a.fecha?`<span style="font-size:.66rem;color:var(--txt3)">${a.fecha}</span>`:""}
       </div>
       <div style="font-size:.72rem;color:var(--txt2);margin-bottom:4px">👤 ${a.autorNombre||"—"}</div>
-      ${a.link?`<div style="font-size:.7rem;margin-top:3px">🔗 <a href="${linkHref(a.link)}" target="_blank" style="color:var(--azulm);word-break:break-all;font-weight:600">Ver publicación: ${a.link}</a></div>`:(a.doi&&!/^https?:\/\//i.test(a.doi)?`<div style="font-size:.7rem;color:var(--txt2);margin-top:3px">🔗 DOI: ${a.doi}</div>`:"")}
-      ${a.link&&a.doi&&!/^https?:\/\//i.test(a.doi)?`<div style="font-size:.68rem;color:var(--txt3);margin-top:3px">DOI: ${a.doi}</div>`:""}
+      ${a.link?`<div style="font-size:.7rem;margin-top:3px">🔗 <a href="${linkHref(a.link)}" target="_blank" style="color:var(--azulm);word-break:break-all;font-weight:600">Ver publicación: ${a.link}</a></div>`:""}
       ${a.resumen?`<div style="font-size:.72rem;color:var(--txt2);margin-top:6px;line-height:1.5">${a.resumen}</div>`:""}
       ${verAdjuntos?`<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
         ${a.adj1_url?`<button class="btn bs bsm" onclick="verAdjArt('${a.adj1_url}')">📄 Ver adjunto 1</button>`:""}
@@ -3603,9 +3605,12 @@ function subirPonencia(){
           if(avalData){payload.aval_b64=avalData.split(",")[1];payload.aval_mime=avalFile.type;payload.aval_nombre=avalFile.name;}
           setTimeout(()=>{
             fetch(url3,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)})
-              .then(()=>{cargarPonenciasDesdeSheets().then(()=>{try{renderPonencias();}catch(ex){}renderDashPonencias();renderDash();});})
+              .then(r=>r.json()).then(data=>{
+                if(data&&!data.ok) toast("⚠️ No se pudo subir el soporte: "+(data.error||"error desconocido"),"err");
+                cargarPonenciasDesdeSheets().then(()=>{try{renderPonencias();}catch(ex){}renderDashPonencias();renderDash();});
+              })
               .catch(()=>{});
-          },1500);
+          },2500);
         }
         ["ponEvento","ponTitulo","ponFecha"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
         ["ponCertFile","ponAvalFile"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
