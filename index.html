@@ -725,22 +725,9 @@ function xlsxDownload(wb,filename){
                 <button class="btn bp" onclick="guardarConfig()">💾 Guardar URL del script</button>
                 <span id="sheetsStatus" style="font-size:.73rem;color:var(--txt3);margin-left:4px;"></span>
               </div>
-              <div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:9px;padding:12px 15px;margin-top:10px;">
-                <div style="font-size:.77rem;font-weight:700;color:#7A3E00;margin-bottom:6px;">⚠️ Importante · Sincronización desde archivo local</div>
-                <div style="font-size:.71rem;color:#92400E;line-height:1.6;margin-bottom:10px;">
-                  Desde un archivo local, Chrome bloquea la sincronización automática por seguridad.<br>
-                  <strong>Solución 1:</strong> Use el botón de abajo para exportar manualmente.<br>
-                  <strong>Solución 2:</strong> Suba el sistema a GitHub Pages — desde ahí funciona automáticamente.
-                </div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                  <button class="btn bp" onclick="exportarTodoAlSheets()" id="btnSyncManual" style="background:linear-gradient(135deg,#002060,#185FA5)">
-                    📤 Exportar todos los datos al Sheets ahora
-                  </button>
-                  <button class="btn bs" onclick="exportExcelEstudiantes()">📊 Descargar Excel local</button>
-                </div>
-                <div style="font-size:.68rem;color:#7A3E00;margin-top:8px;">
-                  💡 El botón "Exportar al Sheets" envía todos los estudiantes registrados a su Google Sheets de una vez.
-                </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                <a class="btn bs" href="https://docs.google.com/spreadsheets/d/1bQyWJUcnn4f7hG4-FuDOoBwuNQyUfvpAHleVnAIABVw/edit" target="_blank" style="text-decoration:none">📊 Abrir hoja de Google Sheets</a>
+                <a class="btn bs" href="https://drive.google.com/drive/search?q=SciTrack_Adjuntos" target="_blank" style="text-decoration:none">📁 Abrir carpeta de adjuntos en Drive</a>
               </div>
             </div>
           </div>
@@ -753,29 +740,8 @@ function xlsxDownload(wb,filename){
                 <input type="text" id="cfgCorreoCoord" placeholder="correo1@unisabana.edu.co, correo2@unisabana.edu.co"/>
               </div>
               <div class="ff"><label>Artículos requeridos para grado</label><input type="number" id="cfgArts" value="2" min="1" max="5"/></div>
-              <div class="ff"><label>Estado mínimo válido</label>
-                <select id="cfgEstado"><option value="aceptado">Aceptado</option><option value="publicado">Publicado</option></select>
-              </div>
-              <div class="ff"><label>Cuartiles válidos</label>
-                <select id="cfgQ"><option value="Q1,Q2">Q1 y Q2</option><option value="Q1">Solo Q1</option></select>
-              </div>
-              <div class="ff"><label>Meses para alerta de estancamiento</label><input type="number" id="cfgMeses" value="6" min="1"/></div>
               <button class="btn bp bfull" onclick="guardarConfig()">Guardar configuración</button>
             </div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="ch"><div class="ct2">Estructura requerida en Google Sheets</div></div>
-          <div class="cb">
-            <div class="conex-s" style="margin-bottom:12px;">Su hoja debe tener estos encabezados exactos en la <strong>Fila 1</strong>, uno por columna:</div>
-            <div class="tw"><table>
-              <thead><tr><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>H</th><th>I</th></tr></thead>
-              <tbody><tr>
-                <td><code>nombre_completo</code></td><td><code>id_codigo</code></td><td><code>cohorte</code></td><td><code>correo</code></td>
-                <td><code>linea</code></td><td><code>director</code></td><td><code>titulo_tesis</code></td><td><code>estado</code></td><td><code>articulos_validos</code></td>
-              </tr></tbody>
-            </table></div>
-            <div class="conex-s" style="margin-top:10px;">Valores válidos para <code>linea</code>: <code>L1</code>, <code>L2</code>, <code>L3</code> · Para <code>estado</code>: <code>pendiente</code>, <code>progreso</code>, <code>cumplido</code>, <code>critico</code></div>
           </div>
         </div>
       </div>
@@ -2500,7 +2466,7 @@ function renderConfig(){
   if(s)s.textContent=sc?"✅ Apps Script conectado · Sincronización activa":"⚠️ Sin configurar";
 }
 function guardarConfig(){
-  ST.config={arts:parseInt(document.getElementById("cfgArts").value)||2,estado:document.getElementById("cfgEstado").value,cuartiles:document.getElementById("cfgQ").value,meses:parseInt(document.getElementById("cfgMeses").value)||6};
+  ST.config={arts:parseInt(document.getElementById("cfgArts").value)||2};
   const su=document.getElementById("scriptUrl");
   if(su&&su.value.trim()) localStorage.setItem(SCRIPT_URL_KEY,su.value.trim());
   const cc2=document.getElementById('cfgCorreoCoord');
